@@ -1,14 +1,13 @@
-# etc Speech (edge-tts-connector)
+# edge-tts-connector
+*aka* etc Speech, ETC
 
 ---
 
-Local in-browser TTS reader (Linux-first) branded **etc Speech**. Uses the `edge-tts` library via a loopback daemon; the companion extension talks only to `127.0.0.1`.
+This is a WIP attempt to make an in-browser TTS reader (targeting Linux for now) using the edge-tts library. We have a local daemon as the go-between, which is supposed to communicate & coordinate with a "companion" browser extension using RPC.
 
 ### Status
 
-- **Daemon (step 1):** `./server.sh start|stop` — see `project.md` / `daemon/`.
-- **Extension shell (step 2):** `cd extension && npm i && npm run build` → load `extension/dist/chrome/` or `extension/dist/firefox/`. Options: paste secret + test connection. Popup: daemon health / secret status. Read path not wired yet.
-- Specs: `AGENTS.md`, `project.md`, `.spec/`.
+Specification groundwork for the full system has been laid, you can see it in AGENTS.md, project.md, etc. Programming groundwork for the background daemon service has been laid in /daemon. Extension groundwork has been laid under /extension.
 
 ### Why slop?
 
