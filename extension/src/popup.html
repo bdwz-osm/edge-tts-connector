@@ -16,20 +16,48 @@
 
     <section class="row meta">
       <span id="version" class="muted"></span>
-      <button type="button" id="refresh" class="linkish">Refresh</button>
+      <span id="sessionMeta" class="muted"></span>
     </section>
 
-    <section class="controls disabled" aria-disabled="true">
-      <p class="hint">Reading controls arrive in a later build step.</p>
+    <section class="controls">
       <div class="btn-row">
-        <button type="button" id="play" disabled>Play</button>
-        <button type="button" id="pause" disabled>Pause</button>
-        <button type="button" id="prev" disabled>Prev</button>
-        <button type="button" id="next" disabled>Next</button>
+        <button type="button" id="play">Play</button>
+        <button type="button" id="pause">Pause</button>
+        <button type="button" id="prev">Prev</button>
+        <button type="button" id="next">Next</button>
       </div>
+      <button type="button" id="stop" class="wide secondary">Stop</button>
+    </section>
+
+    <section class="card">
+      <label class="field">
+        <span>Language</span>
+        <select id="lang"></select>
+      </label>
+      <label class="field">
+        <span>Voice</span>
+        <select id="voice"></select>
+      </label>
+      <label class="field">
+        <span>Gen speed</span>
+        <select id="genSpeed"></select>
+      </label>
+      <label class="field">
+        <span>Playback <output id="playbackOut">1.00</output>×</span>
+        <input id="playbackSpeed" type="range" min="0.5" max="2" step="0.05" />
+      </label>
+      <label class="field">
+        <span>Volume <output id="volumeOut">100</output>%</span>
+        <input id="volume" type="range" min="0" max="1" step="0.01" />
+      </label>
+      <label class="check">
+        <input id="keepalive" type="checkbox" />
+        Audio keepalive
+      </label>
     </section>
 
     <footer>
+      <button type="button" id="clearCache" class="secondary">Clear cache</button>
       <button type="button" id="options">Options</button>
     </footer>
 

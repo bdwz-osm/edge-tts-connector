@@ -223,7 +223,7 @@ All `runtime` messages: `{ type: string, ... }`. Background validates `type`; ig
 | `audio/play` | bg→ | `{ blobUrl, volume, playbackSpeed }` | |
 | `audio/pause` | bg→ | `{}` | |
 | `audio/resume` | bg→ | `{}` | |
-| `audio/stop` | bg→ | `{}` | pause, clear src, revoke |
+| `audio/stop` | bg→ | `{}` | pause, clear src (bg revokes blob URLs) |
 | `audio/setGain` | bg→ | `{ volume?, playbackSpeed? }` | live |
 | `audio/keepalive` | bg→ | `{ on: boolean }` | |
 | `audio/ended` | →bg | `{}` | |
@@ -232,9 +232,9 @@ All `runtime` messages: `{ type: string, ... }`. Background validates `type`; ig
 
 **Play pipeline (background):**
 1. `POST /v1/synth` with text/voice/rate/pitch and `priority: "play"` (prefetch uses `"prefetch"`)
-2. `GET /audio/...` with token → `blob` → `URL.createObjectURL`
-3. `audio/play` with blobUrl
-4. On evict/stop: `revokeObjectURL`
+2. `GET /audio/...` with token → `Blob` (keep in session buffer; **do not** `createObjectURL` in Chrome SW — API missing)
+3. `audio/play` with `{ blob, volume, playbackSpeed }` — Chrome offscreen / FF bg creates object URL and plays
+4. On stop/next: bridge revokes its object URL; buffer drops `Blob` refs on evict
 
 Parallel: extension may have multiple in-flight `/v1/synth` calls (play + prefetch). Daemon workers + coalesce handle concurrency. UX timeouts live in the extension (abort controller / ignore late); daemon does not kill edge-tts mid-stream for time.
 

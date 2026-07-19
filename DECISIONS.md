@@ -37,6 +37,31 @@
 - **Scope:** unit/component tests for cache poison/LRU, config validation, exception classify/retry/circuit, synth validation, HTTP auth/CORS/routes with mocked TTS. No live Microsoft calls.
 - **Not a build-order gate:** curl acceptance remains the step-1 bar; tests are optional local insurance.
 
+## 2026-07-19 — Blob URLs not in service worker
+
+- Chrome MV3 SW has no `URL.createObjectURL`. Background keeps `Blob`; `audio/play` sends **base64** + mimeType to offscreen (Blob/ArrayBuffer messaging was unreliable). Offscreen decodes → Blob → object URL → play.
+- Background must **not** return a Promise for outbound `audio/play|pause|…` messages — that steals the response channel from offscreen. Only handle `audio/ended|error|state` in the SW.
+
+## 2026-07-19 — Chunk/popup review fixes
+
+- **Leaf blocks only:** skip `BLOCK_SEL` nodes that contain another `BLOCK_SEL` (no blockquote/li double-read).
+- **Selection anchor:** `getRangeAt(0).commonAncestorContainer` (not on `Selection`).
+- **Fallback RFH:** when all `anchor: []`, map via visible-text offset in root (`nearestByTextOffset`).
+- **visibleText:** already exclusion-aware; spec clarified (not visibility-only).
+- **Popup:** try/catch on transport/settings messages; `applying` reset in `finally`.
+
+## 2026-07-18 — Read path (steps 3–4 collapsed)
+
+User chose full `reader.md` in one pass (not minimal-then-buffer).
+
+- **Activate:** popup Play on active tab (inject → chunk → play).
+- **UX timeouts:** play synth+audio fetch **45s**; prefetch **30s** (AbortController; ignore late).
+- **Blob URLs:** created and revoked only in background; bridge clears `src` only.
+- **Anchors:** `childIndexPath` = indices among **element children** only (not full childNodes).
+- **Empty BLOCK_SEL:** fallback `splitSoft(visibleText(root))` with anchor `[]` (highlight may no-op).
+- **Read From Here (cold):** no permanent content script — if selection, selection mode; else page from 0. If content already injected, uses last `contextmenu` target → nearest chunk.
+- **Keepalive / shortcuts gate:** still polish (step 5); hooks exist, default off.
+
 ## 2026-07-18 — Firefox host_permissions without port
 
 - Firefox does not honor ports in match patterns; `http://127.0.0.1:24765/*` does not grant fetch to the daemon.

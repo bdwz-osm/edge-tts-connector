@@ -160,8 +160,8 @@ Handoff: implement **one build-order step per session**; do not freestyle archit
 - [x] rpc.md curl suite green (health/voices/synth/audio/errors)  
 - [x] no empty/partial finals; LRU  
 - [x] extension shell: manifests/build, options secret, popup health  
-- [ ] extension blob play; highlight; buffer; selection; Read From Here  
-- [ ] lang filter; gen −50…+100/10%; free playbackRate  
+- [x] extension blob play; highlight; buffer; selection; Read From Here  
+- [x] lang filter; gen −50…+100/10%; free playbackRate  
 - [ ] Chrome + FF smoke; refuse PDF/privileged  
 - [ ] toasts only for current play chunk  
 

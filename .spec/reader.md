@@ -45,12 +45,17 @@ function chunkSelection(sel):
   // same splitSoft; anchor = path to commonAncestorContainer element or []
 ```
 
-`childIndexPath(root, el)`: array of `childNodes` indices from root to el (elements only). Highlight: walk path; if fails, skip highlight that tick.
+`childIndexPath(root, el)`: array of indices among **element children only** (skip text/comment nodes) from root to el. Highlight: walk path; if fails, skip highlight that tick.
 
-**Selection mode:** non-empty selection on activate → `chunkSelection` only (`mode:"selection"`).  
-**Read From Here:** resolve target element → find chunk with same anchor or nearest ancestor with a chunk → set `index`, flush buffer, play.
+**Empty BLOCK_SEL:** if no block chunks, fallback `splitSoft(visibleText(root))` with `anchor: []` (highlight may no-op). `visibleText` skips **EXCLUDE** and hidden nodes (same as block path). Nested blocks: only **leaf** `BLOCK_SEL` nodes (skip el that contains another `BLOCK_SEL` match) to avoid duplicate text.
+
+**Selection mode:** non-empty selection on activate → `chunkSelection` only (`mode:"selection"`). Anchor from `sel.getRangeAt(0).commonAncestorContainer` (not `Selection` itself).
+
+**Read From Here:** resolve target element → find chunk with same anchor or nearest ancestor with a chunk → set `index`, flush buffer, play. If all anchors are `[]` (fallback mode), map by visible-text offset within root. Cold start without prior inject: selection if any, else page (RFH index after inject).
 
 Drop empty. No live MutationObserver v1.
+
+**UX timeouts (extension):** play path abandon **45s**; prefetch **30s**.
 
 ## Session state machine
 

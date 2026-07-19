@@ -17,27 +17,35 @@ const src = join(__dirname, "src");
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
 
-const entries = {
-  background: join(src, "background.ts"),
-  content: join(src, "content.ts"),
-  popup: join(src, "popup.ts"),
-  options: join(src, "options.ts"),
-};
-if (target === "chrome") {
-  entries.offscreen = join(src, "offscreen.ts");
-}
-
-await esbuild.build({
-  entryPoints: entries,
+const define = { __BROWSER__: JSON.stringify(target) };
+const common = {
   bundle: true,
-  outdir: dist,
-  format: "esm",
   target: "es2022",
   sourcemap: true,
   logLevel: "info",
-  define: {
-    __BROWSER__: JSON.stringify(target),
+  define,
+};
+
+// Background / UI pages: ES modules. Content must be IIFE (executeScript is classic).
+await esbuild.build({
+  ...common,
+  entryPoints: {
+    background: join(src, "background.ts"),
+    popup: join(src, "popup.ts"),
+    options: join(src, "options.ts"),
+    ...(target === "chrome"
+      ? { offscreen: join(src, "offscreen.ts") }
+      : {}),
   },
+  outdir: dist,
+  format: "esm",
+});
+
+await esbuild.build({
+  ...common,
+  entryPoints: [join(src, "content.ts")],
+  outfile: join(dist, "content.js"),
+  format: "iife",
 });
 
 const manifestSrc =

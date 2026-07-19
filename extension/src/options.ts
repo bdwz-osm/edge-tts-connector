@@ -42,36 +42,83 @@ function paintProbe(c: ConnectionStatus) {
   if (c.errorCode === "voices_unavailable") {
     pDetail.textContent = "secret ok; voice list unavailable";
     pDetail.className = "warn";
+  } else if (!c.online) {
+    pDetail.textContent = c.error ?? "unreachable";
+    pDetail.className = "err";
+  } else if (c.secretOk === false) {
+    pDetail.textContent = c.error ?? "unauthorized";
+    pDetail.className = "err";
+  } else if (c.secretOk === true) {
+    pDetail.textContent = "ok";
+    pDetail.className = "ok";
   } else {
-    pDetail.textContent = c.error ?? (c.online ? "ok" : "—");
-    pDetail.className = c.error && c.errorCode !== "voices_unavailable" ? "err" : "";
+    pDetail.textContent = c.error ?? "daemon up; set secret to verify auth";
+    pDetail.className = c.error ? "err" : "warn";
   }
 }
 
-async function load() {
-  const settings = (await browser.runtime.sendMessage({
-    type: "options/getSettings",
-  })) as Settings;
-  secretInput.value = settings.secret ?? "";
-  await runProbe();
+function paintTesting() {
+  pOnline.textContent = "…";
+  pOnline.className = "";
+  pVersion.textContent = "…";
+  pVersion.className = "";
+  pSecret.textContent = "…";
+  pSecret.className = "";
+  pDetail.textContent = "testing…";
+  pDetail.className = "warn";
 }
 
-async function runProbe() {
-  testBtn.disabled = true;
+async function send<T>(msg: Record<string, unknown>): Promise<T> {
+  return (await browser.runtime.sendMessage(msg)) as T;
+}
+
+async function load() {
   try {
-    const c = (await browser.runtime.sendMessage({
-      type: "options/testConnection",
-    })) as ConnectionStatus;
-    paintProbe(c);
+    const settings = await send<Settings>({ type: "options/getSettings" });
+    secretInput.value = settings.secret ?? "";
   } catch (e) {
+    flash(e instanceof Error ? e.message : String(e), "err");
+  }
+  await runProbe({ quiet: true });
+}
+
+async function runProbe(opts?: { quiet?: boolean }) {
+  testBtn.disabled = true;
+  paintTesting();
+  try {
+    const c = await send<ConnectionStatus>({
+      type: "options/testConnection",
+    });
+    paintProbe(c);
+    if (!opts?.quiet) {
+      if (!c.online) {
+        flash(c.error ?? "Daemon unreachable", "err");
+      } else if (c.secretOk === false) {
+        flash("Daemon reachable, but secret was rejected (401).", "err");
+      } else if (!c.secretConfigured) {
+        flash("Daemon reachable. Save a secret to verify auth.", "warn");
+      } else if (c.secretOk === true) {
+        flash(
+          c.errorCode === "voices_unavailable"
+            ? "Connected (voice list unavailable)."
+            : "Connected.",
+          "ok",
+        );
+      } else {
+        flash(c.error ?? "Daemon reachable; auth not verified.", "warn");
+      }
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
     paintProbe({
       online: false,
       version: null,
       secretOk: null,
       secretConfigured: secretInput.value.trim().length > 0,
-      error: e instanceof Error ? e.message : String(e),
+      error: msg,
       errorCode: "offline",
     });
+    if (!opts?.quiet) flash(msg, "err");
   } finally {
     testBtn.disabled = false;
   }
@@ -85,7 +132,7 @@ saveBtn.addEventListener("click", () => {
   void (async () => {
     saveBtn.disabled = true;
     try {
-      await browser.runtime.sendMessage({
+      await send({
         type: "options/setSettings",
         patch: { secret: secretInput.value.trim() },
       });
@@ -101,18 +148,31 @@ saveBtn.addEventListener("click", () => {
 
 testBtn.addEventListener("click", () => {
   void (async () => {
-    // Probe uses stored secret; save first if input dirty.
-    const settings = (await browser.runtime.sendMessage({
-      type: "options/getSettings",
-    })) as Settings;
-    if (secretInput.value.trim() !== (settings.secret ?? "")) {
-      await browser.runtime.sendMessage({
-        type: "options/setSettings",
-        patch: { secret: secretInput.value.trim() },
-      });
-      flash("Saved, then testing…", "ok");
+    testBtn.disabled = true;
+    try {
+      // Probe uses stored secret; save first if input dirty.
+      let settings: Settings;
+      try {
+        settings = await send<Settings>({ type: "options/getSettings" });
+      } catch (e) {
+        flash(e instanceof Error ? e.message : String(e), "err");
+        return;
+      }
+      if (secretInput.value.trim() !== (settings.secret ?? "")) {
+        await send({
+          type: "options/setSettings",
+          patch: { secret: secretInput.value.trim() },
+        });
+        flash("Saved secret, testing…", "ok");
+      } else {
+        flash("Testing…", "warn");
+      }
+      await runProbe();
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), "err");
+    } finally {
+      testBtn.disabled = false;
     }
-    await runProbe();
   })();
 });
 
