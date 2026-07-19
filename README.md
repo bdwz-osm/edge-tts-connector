@@ -3,9 +3,11 @@
 
 ---
 
-This is a WIP attempt to make an in-browser TTS reader (targeting Linux for now) using the edge-tts library. We have a local daemon as the go-between, which is supposed to communicate & coordinate with a "companion" browser extension using RPC.
+This is a **heavily WIP** attempt to make an in-browser TTS reader (targeting Linux for now) using the `edge-tts` Python library. We run a local service as the go-between, which is supposed to communicate & coordinate with a "companion" browser extension using RPC.
 
-### Usage
+The result is that you get the page in your browser read block-by-block.
+
+## Setup
 
 I've slopped together a basic prototype with a very extensive amount of yapping. You can probably get it up and running in your browser pretty quickly. 
 
@@ -18,6 +20,10 @@ Once you have the extension installed, get the daemon up and running with `./ser
 Starting the server will generate a `config.toml` in the same directory. It will contain your secret, as well as some other configurable options.
 
 Using this system will generate cached audio clips in `tts-cache`. By default, the system will store up to **1 GB** of cached audio. Changing any of the generation settings will regenerate the clips to match them. You can change this in the config: `max_bytes` under `[cache]`.
+
+## Usage Notes
+
+The extension is likely going to have more difficulty parsing some pages more than others. However, on the pages I've tried, its rules somehow manage to actually find the content you want to read away from all the random clutter. But its current state, the extension will likely jump to some stupid stuff in the body.
 
 ### Why slop?
 
