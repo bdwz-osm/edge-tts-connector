@@ -12,3 +12,6 @@ __pycache__/
 *.pyc
 *.pyo
 .Python
+.pytest_cache/
+.coverage
+htmlcov/

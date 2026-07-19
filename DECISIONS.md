@@ -30,3 +30,9 @@
 - **Protocol (`UnexpectedResponse` / `UnknownResponse`):** no retry → `upstream_reject`.
 - **Voices:** `daemon/voices-cache.json`; startup live then disk; `GET /voices` envelope + 503 `voices_unavailable`; background refresh backoff 5–30 min; `stale` if >24h; unknown voice 400 only when list fresh ≤24h.
 - **SSL / skew:** treated as `upstream_offline` (unusable path to MS), not endless transient retry.
+
+## 2026-07-18 — Daemon unit tests
+
+- **Harness:** `pytest` + `pytest-asyncio` + `pytest-aiohttp` under `daemon/`; `daemon/pytest.ini` sets `pythonpath=.`, `testpaths=tests`. Dev deps in `daemon/requirements-dev.txt` (not runtime `requirements.txt`).
+- **Scope:** unit/component tests for cache poison/LRU, config validation, exception classify/retry/circuit, synth validation, HTTP auth/CORS/routes with mocked TTS. No live Microsoft calls.
+- **Not a build-order gate:** curl acceptance remains the step-1 bar; tests are optional local insurance.
