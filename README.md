@@ -1,13 +1,23 @@
-# edge-tts-connector
-*aka* etc Speech, ETC
+# etc Speech
+*aka* `edge-tts-connector`, ETC
 
 ---
 
 This is a WIP attempt to make an in-browser TTS reader (targeting Linux for now) using the edge-tts library. We have a local daemon as the go-between, which is supposed to communicate & coordinate with a "companion" browser extension using RPC.
 
-### Status
+### Usage
 
-Specification groundwork for the full system has been laid, you can see it in AGENTS.md, project.md, etc. Programming groundwork for the background daemon service has been laid in /daemon. Extension groundwork has been laid under /extension.
+I've slopped together a basic prototype with a very extensive amount of yapping. You can probably get it up and running in your browser pretty quickly. 
+
+Currently requires that you're on Linux (Windows maybe soon), and that you have Python & Node.js installed. Python is likely here to stay, though we might be able to support other Javascript runtimes.
+
+Compile your browser extensions with `./rebuild-extensions.sh`. It provides instructions on how to add an extension from a folder on your machine.
+
+Once you have the extension installed, get the daemon up and running with `./server.sh`. It'll show the secret, which you want to put into the options within the browser extension. Running it again will show the information. Running `./server.sh stop` will kill the server.
+
+Starting the server will generate a `config.toml` in the same directory. It will contain your secret, as well as some other configurable options.
+
+Using this system will generate cached audio clips in `tts-cache`. By default, the system will store up to **1 GB** of cached audio. Changing any of the generation settings will regenerate the clips to match them. You can change this in the config: `max_bytes` under `[cache]`.
 
 ### Why slop?
 

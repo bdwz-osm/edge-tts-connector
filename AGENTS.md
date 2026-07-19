@@ -36,3 +36,12 @@ Keep entries short, dated, and actionable. Prefer appending; do not silently div
 - Do not freestyle architecture (transport, cache layout, auth, playback locus).
 - After a step: curl/build checks that match the step; note leftovers in `DECISIONS.md`.
 - New lasting behavior belongs in `project.md` or `.spec/`, not only in code comments.
+
+## README.md
+
+[`README.md`](README.md) is the maintainer’s voice, not product law and not a second spec.
+
+- **Edit only when facts drift** — wrong commands, paths, status, requirements, or behavior introduced by a code/plan change. Do not rewrite for polish, marketing, or “completeness.”
+- **Match the existing voice** — read the file first; keep the same tone, rhythm, and personality (informal, first-person, dry humor where it’s already there). A stranger should not be able to tell an agent touched it.
+- **Minimal diffs** — fix the inaccurate bit; leave surrounding prose alone unless a neighboring sentence is now false or contradictory.
+- Prefer putting durable how-to detail in `project.md` / `.spec/` / script output; the README stays a short human front door.
