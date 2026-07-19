@@ -76,9 +76,9 @@ function boot() {
   } {
     const sel = window.getSelection();
     if (sel && !sel.isCollapsed && collapse(sel.toString())) {
+      lastRoot = pickRoot(document);
       lastChunks = chunkSelection(sel);
       lastMode = "selection";
-      lastRoot = document.body;
     } else {
       lastRoot = pickRoot(document);
       lastChunks = chunkPage(document);

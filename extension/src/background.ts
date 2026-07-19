@@ -54,6 +54,7 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 browser.tabs.onRemoved.addListener((tabId) => {
+  clearContentReady(tabId);
   void handleContentGone(tabId);
 });
 

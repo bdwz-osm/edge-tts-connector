@@ -77,7 +77,12 @@ async function ensureChromeOffscreen(): Promise<void> {
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (!/already exists|only one offscreen/i.test(msg)) throw e;
+      // Chrome: "Only a single offscreen document may be created."
+      if (
+        !/already exists|only one offscreen|single offscreen/i.test(msg)
+      ) {
+        throw e;
+      }
     }
   })();
   try {
@@ -170,7 +175,18 @@ export async function audioKeepalive(on: boolean): Promise<void> {
     await sendToOffscreen({ type: "audio/keepalive", on });
     return;
   }
-  if (!on) stopFfKeepalive();
+  if (on) startFfKeepalive();
+  else stopFfKeepalive();
+}
+
+function startFfKeepalive() {
+  if (ffKeepalive) return;
+  ffKeepalive = new Audio(
+    "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==",
+  );
+  ffKeepalive.loop = true;
+  ffKeepalive.volume = 0.01;
+  void ffKeepalive.play().catch(() => {});
 }
 
 function stopFfKeepalive() {

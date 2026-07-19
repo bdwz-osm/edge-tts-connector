@@ -203,10 +203,9 @@ async function refresh() {
       await loadVoices();
     }
     if (voices.length) {
-      fillLangs();
+      fillLangs(); // sets langSel from settings with fallback
       applying = true;
       try {
-        langSel.value = settings.lang;
         fillVoices();
       } finally {
         applying = false;

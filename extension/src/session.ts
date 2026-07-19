@@ -288,12 +288,16 @@ export async function onVoiceOrRateChange(): Promise<void> {
   session.voice = settings.voice;
   session.rate = settings.genSpeed;
   session.pitch = "+0Hz";
-  clearBuffer(session);
+  const resume =
+    session.status === "playing" || session.status === "paused";
+  // Leave "playing" before stop so a spurious audio/ended cannot advance.
+  if (session.status === "playing") setStatus("paused");
   session.playGen++;
+  session.audioEpoch++;
+  await audioStop().catch(() => {});
+  clearBuffer(session);
   topUpBuffer();
-  if (session.status === "playing" || session.status === "paused") {
-    await playCurrent();
-  }
+  if (resume && session) await playCurrent();
 }
 
 function clampIndex(i: number, len: number): number {
@@ -500,17 +504,23 @@ async function handlePlayFailure(
     s.buffer.delete(s.index);
     ensureChunk(s.index, "play");
     const retry = await waitReady(s.index, gen);
+    if (session !== s || gen !== s.playGen) return;
     if (retry?.state === "ready" && retry.blob) {
       const settings = await getSettings();
+      const epoch = ++s.audioEpoch;
       await audioEnsure();
+      if (session !== s || gen !== s.playGen) return;
       await audioPlay({
         blob: retry.blob,
         volume: settings.volume,
         playbackSpeed: settings.playbackSpeed,
       });
-      setStatus("playing");
+      if (session === s && gen === s.playGen && s.audioEpoch === epoch) {
+        setStatus("playing");
+      }
       return;
     }
+    // retry failed — fall through to toast + skip
   }
 
   // 502 reject/transient exhausted / other → toast + skip
