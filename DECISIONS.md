@@ -37,6 +37,13 @@
 - **Scope:** unit/component tests for cache poison/LRU, config validation, exception classify/retry/circuit, synth validation, HTTP auth/CORS/routes with mocked TTS. No live Microsoft calls.
 - **Not a build-order gate:** curl acceptance remains the step-1 bar; tests are optional local insurance.
 
+## 2026-07-19 — Venv stamp: recreate on uv/python switch
+
+- Stamp `daemon/venv/.etc-speech-venv` with `backend=` + `python=` major.minor; recreate when stamp missing or disagrees with the *requested* backend.
+- **auto** keeps a still-valid stamped venv (does not destroy `--use-python` just because `uv` is on PATH). Only explicit `--use-uv` / `--use-python` force a backend switch.
+- Recreate stops the daemon first (pidfile) so files under `venv/` are not busy.
+- Extension Bun↔Node: no venv; not analogous.
+
 ## 2026-07-19 — pickRoot must not crown code blocks
 
 - Flat pages (Beej’s Guide: no `article`/`main`, only `.sourceCode` divs + body children) made argmax `textLen - 2*linkText` pick the largest code wrapper (no links → high score). Reading started at first `<pre>`.

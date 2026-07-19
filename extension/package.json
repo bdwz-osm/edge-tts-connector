@@ -6,7 +6,10 @@
   "scripts": {
     "build:chrome": "node esbuild.config.mjs chrome",
     "build:firefox": "node esbuild.config.mjs firefox",
-    "build": "npm run build:chrome && npm run build:firefox"
+    "build": "node esbuild.config.mjs chrome && node esbuild.config.mjs firefox"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "webextension-polyfill": "^0.12.0"

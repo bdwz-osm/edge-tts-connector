@@ -8,27 +8,32 @@ This is a **heavily WIP** attempt to make an in-browser TTS reader (targeting Li
 The result is that you get the page in your browser read block-by-block.
 
 ## Setup
+Currently requires that you're on Mac or Linux (Windows scripts soon), 
 
-I've slopped together a basic prototype with a very extensive amount of yapping. You can probably get it up and running in your browser pretty quickly. 
+You must have these two installed and in your PATH:
+ - Python 3.14+, OR the `uv` toolchain (to run `./server.sh`)
+   - Instructions for installing uv can be found [here](https://docs.astral.sh/uv/getting-started/installation/).) 
+ - Node.js 22+, OR the `bun` toolchain  (to run `./rebuild_extensions.sh`)
+   - Instructions for installing bun can be found [here](https://bun.com).)
 
-Currently requires that you're on Linux (Windows maybe soon), and that you have Python 3.15+ (daemon) & Node.js (browser) installed. (If you have `uv` installed, the script will use that to make the daemon's virtual environment.)
-
-Python is likely here to stay, though we might be able to support other Javascript runtimes.
-
-Compile your browser extensions with `./rebuild-extensions.sh`. It provides instructions on how to add an extension from a folder on your machine.
+Compile your browser extensions with `./rebuild_extensions.sh`. It compiles unpacked folders for each extension to the `./build` folder, and prints instructions on how to load an extension from a folder.
 
 Once you have the extension installed, get the daemon up and running with `./server.sh`.
-`/server.sh` will create a virtual environment in `daemon/venv` and run the server off of that.
+`./server.sh` will create a virtual environment in `daemon/venv` and run the server off of that.
+ 
+By default, either script will prefer to use the toolchain if it's available. You can override this behavior using `./server.sh --use-python` or `./rebuild_extensions.sh --use-node`. 
 
-It'll show the secret, which you want to put into the options within the browser extension. Running it again will show the information. Running `./server.sh stop` will kill the server.
+If you tell `./server.sh` to use uv or Python **explicitly** after having installed the other way, it will regenerate `daemon/venv` and restart. 
+
+`./server.sh` will show the secret, which you will need to give to the browser extension in its Options menu. Running `./server.sh` again will show the information. Running `./server.sh stop` will kill the server.
 
 Starting the server will generate a `config.toml` in the same directory. It will contain your secret, as well as some other configurable options.
 
-Using this system will generate cached audio clips in `tts-cache`. By default, the system will store up to **1 GB** of cached audio. Changing any of the generation settings will regenerate the clips to match them. You can change this in the config: `max_bytes` under `[cache]`.
+Using this system will generate cached audio clips in `tts-cache`. By default, the system will store up to **1 GB** of cached audio. Changing any of the generation settings will regenerate all audio clips to match them. You can change how big the cache will be in the config: `max_bytes` under `[cache]`.
 
 ## Usage Notes
 
-The extension is likely going to have more difficulty parsing some pages more than others. However, on the pages I've tried, its rules somehow manage to actually find the content you want to read away from all the random clutter. But its current state, the extension will likely jump to some stupid stuff in the body.
+The extension is likely going to have more difficulty parsing some pages more than others. However, on the pages I've tried, its rules somehow manage to actually find the content you want to read away from all the random clutter. But its current state, the reader will likely jump to some stupid stuff in the body.
 
 ## "Q&A"
 
@@ -45,5 +50,7 @@ It's reasonably stable in my testing. I can't read all the code, it's very compl
 ### Why slop?
 
 I consider this to be a perfect use case for LLMs: making a patchwork to connect two things together. Furthermore, I have no idea how long the edge-tts workarounds will continue to work in their current state, and so having an LLM write the main part of this in Python will aid in rapid updates.
+
+Harnesses, skills, etc. have also gotten really good in recent times, making a project like this more feasible.
 
 The code was written using Grok 4.5 in OpenCode harness, and reviewed using CodeRabbit.
