@@ -1,2 +1,2 @@
 # Bump manually when changing the pinned Python version.
-PYTHON_VERSION=3.12.8
+PYTHON_VERSION=3.15
