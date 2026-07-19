@@ -7,11 +7,12 @@ Local screen-reader-style TTS for Chromium + Firefox. Extension never hits the n
 | Doc | Contents |
 |-----|----------|
 | **this file** | goals, architecture, daemon ops, defaults, build order |
-| [`spec/rpc.md`](spec/rpc.md) | HTTP wire + curl examples + extension message types |
+| [`spec/rpc.md`](spec/rpc.md) | HTTP wire + curl examples + extension message types + error/retry map |
 | [`spec/reader.md`](spec/reader.md) | chunk algorithm, session state machine, buffer/highlight |
 | [`spec/extension.md`](spec/extension.md) | manifests, build, AudioBridge, settings/UI |
+| [`spec/edge-tts-errors.md`](spec/edge-tts-errors.md) | library exception inventory (reference only) |
 
-Implement against **all four**. If conflict: `project.md` wins on product intent; wire details win in `spec/*`.
+Implement against **project + rpc + reader + extension**. If conflict: `project.md` wins on product intent; wire details win in `spec/rpc.md` et al. `edge-tts-errors.md` is not product law — use it to avoid thrashing/mis-handling library failures.
 
 ## Goals / non-goals
 
@@ -31,6 +32,7 @@ config.toml                  # runtime ops config (gitignore)
 daemon/
   run.sh  requirements.txt
   server.py  tts.py  cache.py  config.py
+  voices-cache.json          # runtime gitignore
   venv/  edge-tts-connector.pid
 extension/                   # see spec/extension.md → dist/
 tts-cache/<voice>/<hash>.mp3
@@ -54,8 +56,9 @@ tts-cache/<voice>/<hash>.mp3
 
 | Knob | Owner |
 |------|--------|
-| secret, workers, cache cap, timeouts, retries, min_audio_bytes | daemon `config.toml` |
+| secret, workers, cache cap, retries, min_audio_bytes | daemon `config.toml` |
 | port/host | hardcoded v1 |
+| UX timeouts (play/prefetch abandon) | extension |
 | voice, lang, gen speed, volume, playback speed, keepalive, buffers | extension settings |
 | pitch | fixed `+0Hz` on wire v1; still in cache hash |
 | `default_voice` in daemon config | API fallback if body omits voice only |
@@ -89,6 +92,8 @@ secret = "<generated>"
 
 [synth]
 # workers = 2
+# retries = 3
+# retry_backoff_s = [0.5, 1.5, 3.0]
 # …
 
 [cache]
@@ -96,16 +101,17 @@ secret = "<generated>"
 # …
 ```
 
-Reject non-loopback host; workers ∈ [1,3].
+Reject non-loopback host; workers ∈ [1,3]. **No daemon synth wall-clock timeout** (`synth_timeout_s` removed) — trust edge-tts connect/read timeouts; extension owns abandon/UX timeouts.
 
 ### Runtime rules
 
-- Preload: `await edge_tts.list_voices()` → memory; soft-fail empty.
-- Synth: `Communicate(..., rate=genSpeed, pitch=..., volume="+0%")`. Rate discrete **−50%…+100%** step 10%; pitch default `+0Hz`.
+- **Voices:** startup live `list_voices()` → on success write `daemon/voices-cache.json` + memory; on failure load disk cache. `GET /voices` envelope + `voices_unavailable` in [`spec/rpc.md`](spec/rpc.md). Background recache while failing: backoff 5 min … 30 min cap. `stale` when data older than 24h (warn in UI after startup refresh attempt).
+- **Voice gate:** if in-memory list is fresh (≤24h) and non-empty, unknown ShortName → 400; otherwise allow any well-formed ShortName.
+- Synth: one new `Communicate` per attempt (`rate`, `pitch`, `volume="+0%"`). Rate discrete **−50%…+100%** step 10%; pitch default `+0Hz`. Body `priority`: `play` \| `prefetch`.
 - **No poison cache:** write `*.part` only; unlink on fail; rename only if bytes ≥ `min_audio_bytes` and not `NoAudioReceived`; purge existing too-small finals; never `ready` without good final file.
-- Errors/retries/HTTP: classify in `tts.py` — table + bodies in [`spec/rpc.md`](spec/rpc.md). Offline = no retry; transient = backoff retries; coalesce in-flight by id.
+- **Errors/retries:** typed classify + budgets + circuit breaker in [`spec/rpc.md`](spec/rpc.md). Play uses config `retries`; prefetch max 2 attempts. Do not `wait_for` around edge-tts. Coalesce in-flight by cache id. Parallel synth requests OK (worker semaphore).
 - Cache path: `tts-cache/<voice>/<md5(rate,pitch,text)>.mp3` — formula in `spec/rpc.md`. LRU by mtime to cap. Semaphore(workers).
-- Routes/CORS/auth/Voice DTO: **`spec/rpc.md` only**.
+- Routes/CORS/auth/Voice DTO: **`spec/rpc.md` only**. Library oddities: [`spec/edge-tts-errors.md`](spec/edge-tts-errors.md) reference only.
 
 ## Extension (summary)
 
@@ -114,7 +120,8 @@ Full detail: [`spec/extension.md`](spec/extension.md), [`spec/reader.md`](spec/r
 - MV3 Chrome + Firefox; inject on activate; refuse privileged/PDF URLs; main frame only.
 - Lang list from voices present only; `Intl.DisplayNames`; voice = `ShortName` id.
 - Gen speed stepped (resynth + hash); playback speed = `playbackRate` live; volume live.
-- One session; buffer 1 behind / 8 ahead; skip on exhausted 502 for current chunk; prefetch silent.
+- One session; buffer 1 behind / 8 ahead; skip on exhausted 502 for current chunk; prefetch silent (`priority: "prefetch"`).
+- Extension may run multiple `/v1/synth` in parallel; apply UX timeouts client-side; ignore/abandon late results without requiring daemon cancel.
 - `audioKeepalive` default off; safe toggle.
 
 ## Failure UX
@@ -123,9 +130,11 @@ Full detail: [`spec/extension.md`](spec/extension.md), [`spec/reader.md`](spec/r
 |------|-----|
 | Daemon down | offline banner |
 | 401 | bad secret |
-| 503 upstream_offline | pause + banner (play chunk) |
-| 502 exhausted | toast current; skip next |
-| 503 busy | prefetch silent; play retry once |
+| 503 `voices_unavailable` | voice picker error; keep last-known settings; reading still possible via ShortName if gate off |
+| `stale: true` voices | warn in options/popup (non-blocking) |
+| 503 upstream_offline | pause + banner (play chunk); prefetch silent |
+| 502 upstream_reject / exhausted transient | toast current; skip next; prefetch silent |
+| 503 busy | prefetch silent; play retry once client-side |
 | Restricted/PDF | refuse |
 | Empty text | message |
 | Nav/tab close | destroy session, revoke blobs |
@@ -171,6 +180,11 @@ Handoff: implement **one build-order step per session**; do not freestyle archit
 | Playback speed | 1.0 |
 | Pitch | +0Hz hidden |
 | min_audio_bytes | 256 |
+| Play retries | 3 (config) |
+| Prefetch max attempts | 2 |
+| Voice list fresh/stale | 24h |
+| Voice refresh backoff | 5 min … 30 min |
+| Skew/403 circuit | 3 strikes → 5 min open |
 | Keepalive / FAB / shortcuts | off |
 | Chunk fail | skip |
 

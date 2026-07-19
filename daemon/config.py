@@ -89,17 +89,10 @@ OPTIONS: tuple[Opt, ...] = (
     ),
     Opt(
         "synth",
-        "timeout_s",
-        "synth_timeout_s",
-        90,
-        "Per-attempt synthesis timeout (seconds).",
-    ),
-    Opt(
-        "synth",
         "retries",
         "synth_retries",
         3,
-        "Attempts for transient upstream failures (offline is not retried).",
+        "Max attempts for play-priority synth on transient upstream failures.",
     ),
     Opt(
         "synth",
@@ -147,12 +140,12 @@ class Config:
     cache_max_bytes: int
     max_text_chars: int
     request_queue_max: int
-    synth_timeout_s: float
     synth_retries: int
     synth_retry_backoff_s: tuple[float, ...]
     min_audio_bytes: int
     config_path: Path
     pidfile: Path
+    voices_cache_path: Path
 
 
 @dataclass(frozen=True)
@@ -338,7 +331,8 @@ def load_config(config_path: Path | None = None, pidfile: Path | None = None) ->
         else:
             print_secret_event("injected", result.secret, config_path)
 
-    merged = {**DEFAULTS, **result.data}
+    # Ignore removed keys from older configs.
+    merged = {**DEFAULTS, **{k: v for k, v in result.data.items() if k != "synth_timeout_s"}}
 
     host = str(merged["host"])
     if not _is_loopback(host):
@@ -360,6 +354,7 @@ def load_config(config_path: Path | None = None, pidfile: Path | None = None) ->
     if secret is None:
         raise SystemExit("config auth.secret is missing or placeholder")
 
+    daemon_dir = Path(__file__).resolve().parent
     return Config(
         host=host,
         port=int(merged["port"]),
@@ -370,12 +365,12 @@ def load_config(config_path: Path | None = None, pidfile: Path | None = None) ->
         cache_max_bytes=int(merged["cache_max_bytes"]),
         max_text_chars=int(merged["max_text_chars"]),
         request_queue_max=int(merged["request_queue_max"]),
-        synth_timeout_s=float(merged["synth_timeout_s"]),
         synth_retries=int(merged["synth_retries"]),
         synth_retry_backoff_s=tuple(float(x) for x in backoff),
         min_audio_bytes=int(merged["min_audio_bytes"]),
         config_path=config_path.resolve(),
         pidfile=pidfile.resolve(),
+        voices_cache_path=daemon_dir / "voices-cache.json",
     )
 
 

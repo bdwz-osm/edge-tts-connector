@@ -5,6 +5,7 @@ daemon/venv/
 daemon/.venv/
 daemon/edge-tts-connector.pid
 daemon/daemon.log
+daemon/voices-cache.json
 daemon/__pycache__/
 tts-cache/
 __pycache__/

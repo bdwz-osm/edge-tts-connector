@@ -2,12 +2,14 @@
 
 Parent: [`../project.md`](../project.md). Base: `http://127.0.0.1:24765`. Auth header `X-Auth-Token: <secret>` on all but `/health`. CORS: echo only `chrome-extension://*` / `moz-extension://*` Origins; `OPTIONS` preflight; allow `X-Auth-Token, Content-Type`.
 
+Library exception inventory (not product law): [`edge-tts-errors.md`](edge-tts-errors.md). Product mapping below wins.
+
 ## HTTP routes
 
 | Method | Path | Auth | |
 |--------|------|------|--|
 | GET | `/health` | no | liveness |
-| GET | `/voices` | yes | Voice DTO[] |
+| GET | `/voices` | yes | voice list envelope (or `voices_unavailable`) |
 | POST | `/v1/synth` | yes | synth or cache hit |
 | GET | `/audio/{voice}/{id}.mp3` | yes | `audio/mpeg` |
 | POST | `/v1/cache/clear` | yes | |
@@ -30,6 +32,38 @@ From `await edge_tts.list_voices()` (not CLI scrape):
 
 Map: `id←ShortName`, `locale←Locale`, `lang←Locale.split("-")[0].lower()`, `gender←Gender`, `friendlyName←FriendlyName`, `status←Status`. Drop `Name`, `SuggestedCodec`, `VoiceTag`.
 
+### GET `/voices` envelope
+
+**200** — daemon has at least one voice in memory (from network and/or disk cache):
+
+```json
+{
+  "voices": [ /* Voice DTO[] */ ],
+  "source": "network",
+  "fetched_at": "2026-07-18T12:00:00+00:00",
+  "stale": false
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `source` | `network` if last successful fill was live `list_voices`; `cache` if serving disk fallback after failed refresh |
+| `fetched_at` | ISO-8601 UTC timestamp of the data’s origin (when list was last successfully fetched from MS) |
+| `stale` | `true` when `now - fetched_at > 24h` (extension may warn; still usable) |
+
+**503** — no usable list (network failed and no disk cache / empty cache):
+
+```json
+{
+  "status": "error",
+  "error": "voices_unavailable",
+  "message": "voice list unavailable",
+  "voices": []
+}
+```
+
+Extension: voice picker shows error; reading may still synth by ShortName when the fresh-cache voice gate is off (see synth validation).
+
 ### Cache id
 
 ```
@@ -50,7 +84,7 @@ curl -s "http://127.0.0.1:24765/health"
 
 curl -s "${H[@]}" "http://127.0.0.1:24765/voices" | head
 
-curl -s "${H[@]}" -d '{"text":"Hello.","voice":"en-US-EmmaMultilingualNeural","rate":"+0%","pitch":"+0Hz"}' \
+curl -s "${H[@]}" -d '{"text":"Hello.","voice":"en-US-EmmaMultilingualNeural","rate":"+0%","pitch":"+0Hz","priority":"play"}' \
   http://127.0.0.1:24765/v1/synth
 # {"status":"ready","id":"<32hex>","voice":"en-US-EmmaMultilingualNeural","cached":false}
 
@@ -69,21 +103,92 @@ curl -s "${H[@]}" -o /tmp/t.mp3 \
 
 | HTTP | body.error | when |
 |------|------------|------|
-| 400 | `bad_request` | validation |
+| 400 | `bad_request` | validation (incl. unknown voice when fresh voice list gate is on) |
 | 401 | `unauthorized` | bad/missing token |
 | 404 | `not_found` | audio missing/too small |
-| 503 | `upstream_offline` | no route to MS / DNS |
+| 503 | `upstream_offline` | no route to MS / DNS / TLS unusable / clock-skew gate / circuit open |
 | 503 | `busy` | queue full |
-| 502 | `upstream_transient` | retries exhausted |
-| 502 | `upstream_reject` | permanent upstream |
+| 503 | `voices_unavailable` | `GET /voices` only — no list in memory or disk |
+| 502 | `upstream_transient` | retries exhausted on transient upstream |
+| 502 | `upstream_reject` | permanent upstream / empty audio / protocol reject |
 | 500 | `internal` | disk/bug |
-| 504 | `timeout` | optional if overall budget exceeded |
 
 ```json
 {"status":"error","error":"upstream_offline","message":"…","attempts":1}
 ```
 
-Synth request body: `{ "text": string, "voice"?: string, "rate"?: "+0%", "pitch"?: "+0Hz" }`. Defaults: config voice, `+0%`, `+0Hz`. Reject rate not in discrete −50…+100 step 10.
+**Synth request body:**
+
+```json
+{
+  "text": "string",
+  "voice": "en-US-EmmaMultilingualNeural",
+  "rate": "+0%",
+  "pitch": "+0Hz",
+  "priority": "play"
+}
+```
+
+| Field | Default | Notes |
+|-------|---------|--------|
+| `text` | required | non-empty; max `max_text_chars` |
+| `voice` | config `default_voice` | ShortName |
+| `rate` | `+0%` | discrete −50…+100 step 10 |
+| `pitch` | `+0Hz` | wire form `±NHz` |
+| `priority` | `play` | `play` \| `prefetch` — retry budget only (see below) |
+
+### Exception → wire mapping (synth worker)
+
+Classify with `isinstance` / aiohttp status — not message substrings. Guide: [`edge-tts-errors.md`](edge-tts-errors.md). Goal: screen-reader calm (no thrash, clear offline, skip bad chunks).
+
+| Kind | Retry? | Sources (non-exhaustive) |
+|------|--------|---------------------------|
+| `bad_request` | no | Our validation; `TypeError`/`ValueError` from edge-tts on inputs we should have caught |
+| `upstream_offline` | play: no; prefetch: within prefetch budget only | DNS / connect refused / unreachable; SSL/cert failures; `SkewAdjustmentError`; circuit open |
+| `upstream_transient` | yes (budget) | `WebSocketError`; connection reset/abort; aiohttp timeouts; `ClientConnectorError` (non-offline); HTTP 429/502/503; other 5xx |
+| `upstream_reject` | no | `NoAudioReceived`; final audio `< min_audio_bytes`; `UnknownResponse`; `UnexpectedResponse`; HTTP 4xx except 429; unusable protocol/parse (`JSONDecodeError`, structural `KeyError`) |
+| `internal` | no | Unexpected bugs; disk `OSError` on cache write (not ENOSPC-as-offline) |
+| `busy` | no | Queue full before accept |
+
+**Not used on daemon synth path:** `timeout` / 504. Do **not** wrap `Communicate.stream()` in daemon `wait_for`. edge-tts owns connect/read timeouts. Extension applies UX timeouts and may drop late HTTP responses; in-flight daemon work can finish and populate cache (harmless).
+
+**Library 403 note:** edge-tts may adjust clock skew and retry **once inside** a single `Communicate` attempt. One daemon attempt = one new `Communicate` instance. Do not multiply daemon retries to “cancel” that; use the **circuit breaker** for mass 403/`SkewAdjustmentError`.
+
+**`UnexpectedResponse` / protocol:** no retry (same payload will not heal a protocol mismatch).
+
+### Retry budgets
+
+| `priority` | Max attempts | Notes |
+|------------|--------------|--------|
+| `play` | `synth_retries` from config (default 3) | Only **transient** kinds advance the retry counter. offline/reject/bad_request/internal fail on that attempt. |
+| `prefetch` | **2** (fixed) | Same classification; never uses full play budget. Silent at extension. |
+
+Backoff between attempts: `synth_retry_backoff_s` (last entry reused if attempts exceed length).
+
+In-flight **coalesce** by cache key still applies across priorities (one worker job; waiters share the result).
+
+### Circuit breaker (process-wide)
+
+After **3 consecutive** synth failures classified as clock/auth sickness (`SkewAdjustmentError` or HTTP 403 after library handling), **open** for **5 minutes**:
+
+- New synth → immediate `upstream_offline` (no upstream call)
+- Successful synth or successful live voice fetch → **close** and reset counter
+- Purpose: stop stampedes when host clock/proxy breaks Sec-MS-GEC
+
+### Voice list gate (synth)
+
+| Voice list state | Unknown `voice` ShortName |
+|------------------|---------------------------|
+| Fresh list in memory (`fetched_at` within 24h, non-empty) | **400** `bad_request` |
+| No list, or list older than 24h | Allow any `VOICE_RE`-valid ShortName (edge-tts may still `NoAudioReceived`) |
+
+### Voices cache (daemon)
+
+- Path: `daemon/voices-cache.json` (gitignore)
+- On startup: try live `list_voices()`; on success write cache + memory; on failure load cache if present
+- If still empty → `GET /voices` → 503 `voices_unavailable`; background refresh continues
+- Background refresh while live fetch is failing: backoff **5 min → … → 30 min** per attempt (cap 30); on success reset backoff and overwrite cache
+- Never block synth workers on voice refresh
 
 ## Extension internal messages
 
@@ -126,9 +231,11 @@ All `runtime` messages: `{ type: string, ... }`. Background validates `type`; ig
 | `audio/state` | →bg | `{ playing: boolean }` | optional |
 
 **Play pipeline (background):**
-1. `POST /v1/synth` with text/voice/rate/pitch  
-2. `GET /audio/...` with token → `blob` → `URL.createObjectURL`  
-3. `audio/play` with blobUrl  
+1. `POST /v1/synth` with text/voice/rate/pitch and `priority: "play"` (prefetch uses `"prefetch"`)
+2. `GET /audio/...` with token → `blob` → `URL.createObjectURL`
+3. `audio/play` with blobUrl
 4. On evict/stop: `revokeObjectURL`
+
+Parallel: extension may have multiple in-flight `/v1/synth` calls (play + prefetch). Daemon workers + coalesce handle concurrency. UX timeouts live in the extension (abort controller / ignore late); daemon does not kill edge-tts mid-stream for time.
 
 Popup/options talk only to background (`popup/*` types as needed: getStatus, setSettings, transport commands)—keep thin; not normative beyond: popup never fetch(daemon) directly if SW can (prefer bg sole RPC client).

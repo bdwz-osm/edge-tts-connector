@@ -65,6 +65,7 @@ def error_json(
     status: int,
     *,
     attempts: int | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> web.Response:
     body: dict[str, Any] = {
         "status": "error",
@@ -73,6 +74,8 @@ def error_json(
     }
     if attempts is not None:
         body["attempts"] = attempts
+    if extra:
+        body.update(extra)
     return web.json_response(body, status=status)
 
 
@@ -91,7 +94,8 @@ async def handle_health(_request: web.Request) -> web.Response:
 
 async def handle_voices(request: web.Request) -> web.Response:
     tts: TTSService = request.app["tts"]
-    return web.json_response(tts.voices())
+    status, body = tts.voices_response()
+    return web.json_response(body, status=status)
 
 
 async def handle_synth(request: web.Request) -> web.Response:
@@ -108,6 +112,7 @@ async def handle_synth(request: web.Request) -> web.Response:
             data.get("voice"),
             data.get("rate"),
             data.get("pitch"),
+            data.get("priority"),
         )
     except SynthError as exc:
         return synth_error_response(exc)
@@ -163,7 +168,12 @@ def build_app(cfg, cache: Cache, tts: TTSService) -> web.Application:
 
 async def _on_startup(app: web.Application) -> None:
     tts: TTSService = app["tts"]
-    await tts.preload_voices()
+    await tts.start()
+
+
+async def _on_cleanup(app: web.Application) -> None:
+    tts: TTSService = app["tts"]
+    await tts.stop()
 
 
 def _write_pid(pidfile: Path) -> None:
@@ -182,6 +192,7 @@ async def run_server(cfg) -> None:
     tts = TTSService(cfg, cache)
     app = build_app(cfg, cache, tts)
     app.on_startup.append(_on_startup)
+    app.on_cleanup.append(_on_cleanup)
 
     runner = web.AppRunner(app, access_log=None)
     await runner.setup()
