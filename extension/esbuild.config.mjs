@@ -10,8 +10,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(__dirname, "..");
 const target = process.argv[2] === "firefox" ? "firefox" : "chrome";
-const dist = join(__dirname, "dist", target);
+// Repo-root build/ — easy to find for Load unpacked / temporary add-on.
+const dist = join(repoRoot, "build", target);
 const src = join(__dirname, "src");
 
 rmSync(dist, { recursive: true, force: true });
@@ -73,4 +75,4 @@ for (const name of ["popup.css", "options.css"]) {
   if (existsSync(p)) copyFileSync(p, join(dist, name));
 }
 
-console.log(`built ${target} → dist/${target}/`);
+console.log(`built ${target} → build/${target}/`);

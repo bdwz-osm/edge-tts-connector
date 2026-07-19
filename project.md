@@ -34,7 +34,7 @@ daemon/
   server.py  tts.py  cache.py  config.py
   voices-cache.json          # runtime gitignore
   venv/  edge-tts-connector.pid
-extension/                   # see .spec/extension.md → dist/chrome|firefox/
+extension/                   # see .spec/extension.md → build/chrome|firefox/
 tts-cache/<voice>/<hash>.mp3
 ```
 

@@ -17,3 +17,4 @@ __pycache__/
 htmlcov/
 extension/node_modules/
 extension/dist/
+build/

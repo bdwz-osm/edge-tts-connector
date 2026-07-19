@@ -79,12 +79,13 @@ User chose full `reader.md` in one pass (not minimal-then-buffer).
 
 ## 2026-07-18 — Extension shell (build-order step 2)
 
-- **Stack:** TypeScript ES2022 + esbuild + `webextension-polyfill`. Build: `cd extension && npm i && npm run build:chrome|build:firefox|build` → load `extension/dist/chrome/` or `extension/dist/firefox/` (separate outputs; building one does not wipe the other).
+- **Stack:** TypeScript ES2022 + esbuild + `webextension-polyfill`. Build: `./rebuild_extensions.sh` or `cd extension && npm run build` → load `build/chrome/` or `build/firefox/`.
 - **Sole RPC client:** background `rpc.ts` only; popup/options message bg (`popup/*`, `options/*`). Auth probe = `GET /health` then `GET /voices` (401 → bad secret; `voices_unavailable` still counts as secret-ok).
 - **UI scope this step:** options secret + test connection; popup online/secret/restricted banner + options link. Play/transport controls present but disabled until step 3.
 - **Stubs:** `content.ts`, `chunk.ts`, `offscreen.ts`/`audioBridge.ts`, context-menu handler no-op beyond restricted-URL guard.
 - **Browser define:** esbuild `__BROWSER__` (`chrome`|`firefox`) for later AudioBridge split; Firefox build omits offscreen entry/html.
-- **dist/ + node_modules gitignored;** commit `package-lock.json`.
+- **Output:** repo-root `build/{chrome,firefox}/` (gitignored with `extension/node_modules/`). Commit `package-lock.json`.
+- **Loader script:** `./rebuild_extensions.sh` prints browser-specific load steps (Chromium Load unpacked / Firefox temporary add-on).
 
 ## 2026-07-18 — Rename `spec/` → `.spec/`
 

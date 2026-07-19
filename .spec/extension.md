@@ -20,23 +20,30 @@ extension/
     popup.ts html css
     options.ts html css
     styles/highlight.css
-  dist/
-    chrome/                   # load unpacked (Chromium)
-    firefox/                  # load temporary add-on (Firefox)
+```
+
+Repo-root outputs (not under `extension/`):
+
+```
+build/
+  chrome/                   # Load unpacked (Chromium)
+  firefox/                  # Temporary add-on (Firefox)
 ```
 
 ## Build
 
 ```bash
+./rebuild_extensions.sh     # preferred: npm i + both targets + load instructions
+# or:
 cd extension && npm i
-npm run build:chrome    # → dist/chrome/
-npm run build:firefox   # → dist/firefox/
-npm run build           # both (does not wipe the other)
+npm run build:chrome        # → ../build/chrome/
+npm run build:firefox       # → ../build/firefox/
+npm run build               # both
 ```
 
 **esbuild entries:** `background`, `content`, `popup`, `options`, `offscreen` (chrome). Bundle `webextension-polyfill` into bg/popup/options/content as needed.
 
-Load unpacked: Chrome/Vivaldi → `dist/chrome/`; Firefox → `dist/firefox/`.
+Load unpacked: Chrome/Vivaldi → `build/chrome/`; Firefox → `build/firefox/` (see `./rebuild_extensions.sh` output).
 
 No remote code. TS target ES2022. Keep deps minimal (polyfill + esbuild).
 

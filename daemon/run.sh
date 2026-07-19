@@ -132,7 +132,12 @@ print_status() {
   log "  secret  $secret"
   log "  log     $LOGFILE"
   log ""
-  log "Put the secret in the extension options (X-Auth-Token)."
+  log "Put the secret in the extension Options (X-Auth-Token)."
+  log ""
+  log "Browser extension (if you have not loaded it yet):"
+  log "  ./rebuild_extensions.sh"
+  log "  → build/chrome/   Chromium / Vivaldi / Edge  (Load unpacked)"
+  log "  → build/firefox/  Firefox  (about:debugging → Load Temporary Add-on)"
   log "Stop with: $0 stop"
 }
 
