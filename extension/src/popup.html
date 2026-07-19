@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>etc Speech</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>etc Speech</h1>
+      <div id="status" class="status unknown" role="status">…</div>
+    </header>
+
+    <section id="banner" class="banner hidden" role="alert"></section>
+
+    <section class="row meta">
+      <span id="version" class="muted"></span>
+      <button type="button" id="refresh" class="linkish">Refresh</button>
+    </section>
+
+    <section class="controls disabled" aria-disabled="true">
+      <p class="hint">Reading controls arrive in a later build step.</p>
+      <div class="btn-row">
+        <button type="button" id="play" disabled>Play</button>
+        <button type="button" id="pause" disabled>Pause</button>
+        <button type="button" id="prev" disabled>Prev</button>
+        <button type="button" id="next" disabled>Next</button>
+      </div>
+    </section>
+
+    <footer>
+      <button type="button" id="options">Options</button>
+    </footer>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

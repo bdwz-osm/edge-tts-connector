@@ -15,3 +15,5 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+extension/node_modules/
+extension/dist/

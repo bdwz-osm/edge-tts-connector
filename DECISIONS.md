@@ -36,3 +36,22 @@
 - **Harness:** `pytest` + `pytest-asyncio` + `pytest-aiohttp` under `daemon/`; `daemon/pytest.ini` sets `pythonpath=.`, `testpaths=tests`. Dev deps in `daemon/requirements-dev.txt` (not runtime `requirements.txt`).
 - **Scope:** unit/component tests for cache poison/LRU, config validation, exception classify/retry/circuit, synth validation, HTTP auth/CORS/routes with mocked TTS. No live Microsoft calls.
 - **Not a build-order gate:** curl acceptance remains the step-1 bar; tests are optional local insurance.
+
+## 2026-07-18 — Firefox host_permissions without port
+
+- Firefox does not honor ports in match patterns; `http://127.0.0.1:24765/*` does not grant fetch to the daemon.
+- Firefox manifest: `http://127.0.0.1/*`. Chrome keeps `:24765`. Auth secret still required.
+
+## 2026-07-18 — Friendly name: etc Speech
+
+- **UI / store name:** `etc Speech` (manifest `name`, toolbar title, popup/options, context menu).
+- **Not renamed:** repo path, package ids, gecko id `edge-tts-connector@local`, daemon logger/pidfile names, library `edge-tts`.
+
+## 2026-07-18 — Extension shell (build-order step 2)
+
+- **Stack:** TypeScript ES2022 + esbuild + `webextension-polyfill`. Build: `cd extension && npm i && npm run build:chrome|build:firefox|build` → load `extension/dist/chrome/` or `extension/dist/firefox/` (separate outputs; building one does not wipe the other).
+- **Sole RPC client:** background `rpc.ts` only; popup/options message bg (`popup/*`, `options/*`). Auth probe = `GET /health` then `GET /voices` (401 → bad secret; `voices_unavailable` still counts as secret-ok).
+- **UI scope this step:** options secret + test connection; popup online/secret/restricted banner + options link. Play/transport controls present but disabled until step 3.
+- **Stubs:** `content.ts`, `chunk.ts`, `offscreen.ts`/`audioBridge.ts`, context-menu handler no-op beyond restricted-URL guard.
+- **Browser define:** esbuild `__BROWSER__` (`chrome`|`firefox`) for later AudioBridge split; Firefox build omits offscreen entry/html.
+- **dist/ + node_modules gitignored;** commit `package-lock.json`.

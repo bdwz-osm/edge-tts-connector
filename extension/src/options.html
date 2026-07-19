@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>etc Speech — Options</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>etc Speech Options</h1>
+      <p class="lead">
+        The extension talks only to the local daemon at
+        <code>127.0.0.1:24765</code>. Paste the shared secret printed when you
+        run <code>./server.sh start</code> (also in repo-root
+        <code>config.toml</code> → <code>auth.secret</code>).
+      </p>
+
+      <section class="card">
+        <h2>Auth secret</h2>
+        <label class="field">
+          <span>X-Auth-Token</span>
+          <input
+            id="secret"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="paste secret"
+          />
+        </label>
+        <label class="check">
+          <input id="showSecret" type="checkbox" />
+          Show secret
+        </label>
+        <div class="btn-row">
+          <button type="button" id="save">Save</button>
+          <button type="button" id="test" class="secondary">Test connection</button>
+        </div>
+        <p id="saveMsg" class="msg" hidden></p>
+      </section>
+
+      <section class="card">
+        <h2>Connection</h2>
+        <dl id="probe" class="probe">
+          <div><dt>Daemon</dt><dd id="p-online">—</dd></div>
+          <div><dt>Version</dt><dd id="p-version">—</dd></div>
+          <div><dt>Secret</dt><dd id="p-secret">—</dd></div>
+          <div><dt>Detail</dt><dd id="p-detail">—</dd></div>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h2>Keyboard shortcuts</h2>
+        <p class="muted">
+          Commands are registered; enable and bind them in the browser’s extension
+          shortcuts page after the read path lands.
+        </p>
+        <ul class="muted">
+          <li>Chrome: <code>chrome://extensions/shortcuts</code></li>
+          <li>Firefox: <code>about:addons</code> → gear → Manage Extension Shortcuts</li>
+        </ul>
+      </section>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

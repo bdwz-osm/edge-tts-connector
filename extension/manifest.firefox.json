@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "etc Speech",
+  "version": "0.1.0",
+  "description": "Local screen-reader-style TTS via a loopback edge-tts daemon",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "contextMenus",
+    "tabs"
+  ],
+  "host_permissions": ["http://127.0.0.1/*"],
+  "background": {
+    "scripts": ["background.js"],
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "etc Speech"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "toggle-pause": { "description": "Play/pause" },
+    "next-chunk": { "description": "Next chunk" },
+    "prev-chunk": { "description": "Previous chunk" }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "edge-tts-connector@local",
+      "strict_min_version": "121.0"
+    }
+  }
+}

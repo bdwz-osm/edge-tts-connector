@@ -34,7 +34,7 @@ daemon/
   server.py  tts.py  cache.py  config.py
   voices-cache.json          # runtime gitignore
   venv/  edge-tts-connector.pid
-extension/                   # see spec/extension.md → dist/
+extension/                   # see spec/extension.md → dist/chrome|firefox/
 tts-cache/<voice>/<hash>.mp3
 ```
 
@@ -156,11 +156,10 @@ Handoff: implement **one build-order step per session**; do not freestyle archit
 
 ## v1 checklist
 
-- [ ] server.sh / run.sh start/stop, :24765, secret  
-
-
-- [ ] rpc.md curl suite green (health/voices/synth/audio/errors)  
-- [ ] no empty/partial finals; LRU  
+- [x] server.sh / run.sh start/stop, :24765, secret  
+- [x] rpc.md curl suite green (health/voices/synth/audio/errors)  
+- [x] no empty/partial finals; LRU  
+- [x] extension shell: manifests/build, options secret, popup health  
 - [ ] extension blob play; highlight; buffer; selection; Read From Here  
 - [ ] lang filter; gen −50…+100/10%; free playbackRate  
 - [ ] Chrome + FF smoke; refuse PDF/privileged  

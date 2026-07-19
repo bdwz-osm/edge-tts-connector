@@ -20,22 +20,23 @@ extension/
     popup.ts html css
     options.ts html css
     styles/highlight.css
-  dist/                       # load unpacked from here
-    manifest.json             # copied chrome or firefox at build
-    *.js *.html *.css
+  dist/
+    chrome/                   # load unpacked (Chromium)
+    firefox/                  # load temporary add-on (Firefox)
 ```
 
 ## Build
 
 ```bash
 cd extension && npm i
-npm run build:chrome    # esbuild entries → dist/ + cp manifest.chrome.json dist/manifest.json
-npm run build:firefox   # same + firefox manifest
+npm run build:chrome    # → dist/chrome/
+npm run build:firefox   # → dist/firefox/
+npm run build           # both (does not wipe the other)
 ```
 
 **esbuild entries:** `background`, `content`, `popup`, `options`, `offscreen` (chrome). Bundle `webextension-polyfill` into bg/popup/options/content as needed.
 
-Load unpacked: Chrome `chrome://extensions` → dist/; Firefox `about:debugging` → dist/.
+Load unpacked: Chrome/Vivaldi → `dist/chrome/`; Firefox → `dist/firefox/`.
 
 No remote code. TS target ES2022. Keep deps minimal (polyfill + esbuild).
 
@@ -44,11 +45,11 @@ No remote code. TS target ES2022. Keep deps minimal (polyfill + esbuild).
 ```json
 {
   "manifest_version": 3,
-  "name": "edge-tts-connector",
+  "name": "etc Speech",
   "version": "0.1.0",
   "permissions": ["storage", "activeTab", "scripting", "contextMenus", "tabs"],
   "host_permissions": ["http://127.0.0.1:24765/*"],
-  "action": { "default_popup": "popup.html", "default_title": "Edge TTS" },
+  "action": { "default_popup": "popup.html", "default_title": "etc Speech" },
   "options_ui": { "page": "options.html", "open_in_tab": true },
   "commands": {
     "toggle-pause": { "description": "Play/pause" },
@@ -58,15 +59,18 @@ No remote code. TS target ES2022. Keep deps minimal (polyfill + esbuild).
 }
 ```
 
-**Chrome add:** `"permissions": […, "offscreen"]`, `"background": { "service_worker": "background.js", "type": "module" }`.
+**Chrome add:** `"permissions": […, "offscreen"]`, `"background": { "service_worker": "background.js", "type": "module" }`. Keep port in `host_permissions` (Chrome supports it).
 
 **Firefox add:**
 ```json
+"host_permissions": ["http://127.0.0.1/*"],
 "background": { "scripts": ["background.js"], "type": "module" },
 "browser_specific_settings": {
   "gecko": { "id": "edge-tts-connector@local", "strict_min_version": "121.0" }
 }
 ```
+
+Firefox **ignores ports in match patterns** ([MDN](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Match_patterns), bugs 1362809 / 1468162). Use host-only `http://127.0.0.1/*`; daemon still binds `:24765`. Broader than one port, still loopback-only + secret.
 
 No default `content_scripts`. Inject on user activate:
 
@@ -77,7 +81,7 @@ await browser.scripting.executeScript({ target: { tabId }, files: ["content.js"]
 
 **Refuse activate** if URL matches: `chrome:`, `chrome-extension:`, `about:`, `edge:`, `devtools:`, Web Store, or obvious built-in PDF viewer schemes—show popup/page error.
 
-Context menu (onInstalled): `Edge TTS: Read From Here` contexts `["page","selection"]`.
+Context menu (onInstalled): `etc Speech: Read From Here` contexts `["page","selection"]`.
 
 ## Settings (`storage.local`)
 
