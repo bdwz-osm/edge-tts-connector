@@ -106,7 +106,7 @@ curl -s "${H[@]}" -o /tmp/t.mp3 \
 | 400 | `bad_request` | validation (incl. unknown voice when fresh voice list gate is on) |
 | 401 | `unauthorized` | bad/missing token |
 | 404 | `not_found` | audio missing/too small |
-| 503 | `upstream_offline` | no route to MS / DNS / TLS unusable / clock-skew gate / circuit open |
+| 503 | `upstream_offline` | no route to MS / DNS / TLS unusable / MS HTTP 403 / skew / circuit open |
 | 503 | `busy` | queue full |
 | 503 | `voices_unavailable` | `GET /voices` only — no list in memory or disk |
 | 502 | `upstream_transient` | retries exhausted on transient upstream |
@@ -144,24 +144,24 @@ Classify with `isinstance` / aiohttp status — not message substrings. Guide: [
 | Kind | Retry? | Sources (non-exhaustive) |
 |------|--------|---------------------------|
 | `bad_request` | no | Our validation; `TypeError`/`ValueError` from edge-tts on inputs we should have caught |
-| `upstream_offline` | play: no; prefetch: within prefetch budget only | DNS / connect refused / unreachable; SSL/cert failures; `SkewAdjustmentError`; circuit open |
+| `upstream_offline` | play: no; prefetch: within prefetch budget only | DNS / connect refused / unreachable; SSL/cert failures; `SkewAdjustmentError`; **HTTP 403** (post-library); circuit open |
 | `upstream_transient` | yes (budget) | `WebSocketError`; connection reset/abort; aiohttp timeouts; `ClientConnectorError` (non-offline); HTTP 429/502/503; other 5xx |
-| `upstream_reject` | no | `NoAudioReceived`; final audio `< min_audio_bytes`; `UnknownResponse`; `UnexpectedResponse`; HTTP 4xx except 429; unusable protocol/parse (`JSONDecodeError`, structural `KeyError`) |
+| `upstream_reject` | no | `NoAudioReceived`; final audio `< min_audio_bytes`; `UnknownResponse`; `UnexpectedResponse`; HTTP 4xx **except 403 and 429**; unusable protocol/parse (`JSONDecodeError`, structural `KeyError`) |
 | `internal` | no | Unexpected bugs; disk `OSError` on cache write (not ENOSPC-as-offline) |
 | `busy` | no | Queue full before accept |
 
+**HTTP 403 (single mapping):** Always `upstream_offline` + **clock/auth sickness** for the circuit breaker. Never `upstream_reject`. edge-tts may already have adjusted skew and retried once inside the same `Communicate` attempt; a 403 that still escapes is treated as unusable path to MS (clock/proxy/DRM), not a permanent content reject. One daemon attempt = one new `Communicate` — do not multiply daemon retries to “undo” the library’s inner 403 retry.
+
 **Not used on daemon synth path:** `timeout` / 504. Do **not** wrap `Communicate.stream()` in daemon `wait_for`. edge-tts owns connect/read timeouts. Extension applies UX timeouts and may drop late HTTP responses; in-flight daemon work can finish and populate cache (harmless).
 
-**Library 403 note:** edge-tts may adjust clock skew and retry **once inside** a single `Communicate` attempt. One daemon attempt = one new `Communicate` instance. Do not multiply daemon retries to “cancel” that; use the **circuit breaker** for mass 403/`SkewAdjustmentError`.
-
-**`UnexpectedResponse` / protocol:** no retry (same payload will not heal a protocol mismatch).
+**`UnexpectedResponse` / protocol:** no retry (protocol mismatch will not heal).
 
 ### Retry budgets
 
 | `priority` | Max attempts | Notes |
 |------------|--------------|--------|
-| `play` | `synth_retries` from config (default 3) | Only **transient** kinds advance the retry counter. offline/reject/bad_request/internal fail on that attempt. |
-| `prefetch` | **2** (fixed) | Same classification; never uses full play budget. Silent at extension. |
+| `play` | `synth_retries` from config (default 3) | Only **transient** kinds advance the retry counter. offline/reject/bad_request/internal fail on that attempt (403/offline included: no play retry). |
+| `prefetch` | **2** (fixed) | Same classification; never uses full play budget. Silent at extension. Prefetch may retry offline (incl. 403) once within this budget. |
 
 Backoff between attempts: `synth_retry_backoff_s` (last entry reused if attempts exceed length).
 
@@ -169,7 +169,7 @@ In-flight **coalesce** by cache key still applies across priorities (one worker 
 
 ### Circuit breaker (process-wide)
 
-After **3 consecutive** synth failures classified as clock/auth sickness (`SkewAdjustmentError` or HTTP 403 after library handling), **open** for **5 minutes**:
+Clock/auth sickness = `SkewAdjustmentError` **or** HTTP **403** (both already classified `upstream_offline`). After **3 consecutive** synth failures with that flag, **open** for **5 minutes**:
 
 - New synth → immediate `upstream_offline` (no upstream call)
 - Successful synth or successful live voice fetch → **close** and reset counter

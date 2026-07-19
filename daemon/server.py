@@ -176,11 +176,52 @@ async def _on_cleanup(app: web.Application) -> None:
     await tts.stop()
 
 
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def _write_pid(pidfile: Path) -> None:
-    pidfile.write_text(str(os.getpid()) + "\n", encoding="utf-8")
+    """Claim pidfile exclusively; refuse if another live process owns it."""
+    my_pid = os.getpid()
+    if pidfile.is_file():
+        try:
+            old = int(pidfile.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            old = None
+        if old is not None and old != my_pid and _pid_alive(old):
+            raise SystemExit(f"pidfile {pidfile} owned by live process {old}")
+        try:
+            pidfile.unlink(missing_ok=True)
+        except OSError as exc:
+            raise SystemExit(f"cannot claim pidfile {pidfile}: {exc}") from exc
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    try:
+        fd = os.open(pidfile, flags, 0o644)
+    except FileExistsError as exc:
+        raise SystemExit(f"pidfile {pidfile} already exists") from exc
+    try:
+        os.write(fd, f"{my_pid}\n".encode("ascii"))
+    finally:
+        os.close(fd)
 
 
 def _remove_pid(pidfile: Path) -> None:
+    """Unlink pidfile only if it records this process."""
+    try:
+        recorded = int(pidfile.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return
+    if recorded != os.getpid():
+        return
     try:
         pidfile.unlink(missing_ok=True)
     except OSError:
@@ -194,19 +235,6 @@ async def run_server(cfg) -> None:
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
 
-    runner = web.AppRunner(app, access_log=None)
-    await runner.setup()
-    site = web.TCPSite(runner, cfg.host, cfg.port, reuse_address=True)
-    try:
-        await site.start()
-    except OSError as exc:
-        log.error("bind failed on %s:%s: %s", cfg.host, cfg.port, exc)
-        await runner.cleanup()
-        raise SystemExit(1) from exc
-
-    _write_pid(cfg.pidfile)
-    log.info("listening on http://%s:%s", cfg.host, cfg.port)
-
     stop = asyncio.Event()
 
     def _stop(*_args: object) -> None:
@@ -219,10 +247,29 @@ async def run_server(cfg) -> None:
         except NotImplementedError:
             pass
 
-    await stop.wait()
-    log.info("shutting down")
-    await runner.cleanup()
-    _remove_pid(cfg.pidfile)
+    runner = web.AppRunner(app, access_log=None)
+    await runner.setup()
+    site = web.TCPSite(runner, cfg.host, cfg.port, reuse_address=True)
+    try:
+        await site.start()
+    except OSError as exc:
+        log.error("bind failed on %s:%s: %s", cfg.host, cfg.port, exc)
+        await runner.cleanup()
+        raise SystemExit(1) from exc
+
+    pid_claimed = False
+    try:
+        _write_pid(cfg.pidfile)
+        pid_claimed = True
+        log.info("listening on http://%s:%s", cfg.host, cfg.port)
+        await stop.wait()
+        log.info("shutting down")
+    finally:
+        try:
+            await runner.cleanup()
+        finally:
+            if pid_claimed:
+                _remove_pid(cfg.pidfile)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -242,7 +289,7 @@ def main(argv: list[str] | None = None) -> None:
     try:
         asyncio.run(run_server(cfg))
     except KeyboardInterrupt:
-        pass
+        raise SystemExit(130) from None
 
 
 if __name__ == "__main__":

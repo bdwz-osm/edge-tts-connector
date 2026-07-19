@@ -262,9 +262,12 @@ These are **not** raised with `raise` in package code as edge-tts types, but the
 | Full path | When |
 | --- | --- |
 | `asyncio.TimeoutError` | May surface depending on aiohttp/Python version for timeouts |
-| `concurrent.futures.CancelledError` / thread exceptions | Via `stream_sync` / `save_sync` thread pool; underlying exception is usually re-raised by `future.result()` |
+| Worker exceptions via `save_sync` | `save_sync` runs `asyncio.run(self.save(...))` in a thread pool and **re-raises** via `future.result()` |
+| Worker exceptions via `stream_sync` | Different contract (see below) — **not** the same as `save_sync` |
 
-`stream_sync` / `save_sync` run async work in a worker thread; exceptions from `stream`/`save` propagate to the calling thread.
+**`save_sync`:** submits `asyncio.run(self.save(...))` to a `ThreadPoolExecutor` and calls `future.result()`. Failures from `save` / the worker propagate to the caller.
+
+**`stream_sync`:** runs `async for item in self.stream()` in a worker thread, pushing chunks onto a `queue.Queue` and a trailing `None` sentinel. The calling thread blocks on `queue.get()` until `None`. If the worker exits with an exception **before** enqueueing the sentinel, the consumer can **block indefinitely** and the exception is **not** re-raised through `future.result()` (the future is fire-and-forget via `executor.submit` without joining on error). Daemons should prefer the async `stream()` / `save()` APIs (this project does) and not rely on `stream_sync` for production error handling.
 
 ### 4.3 Category: Parsing (unhandled; can bubble)
 

@@ -404,14 +404,16 @@ class TTSService:
             log.warning("voices cache write failed: %s", _exc_name(exc))
 
     async def _voice_refresh_loop(self) -> None:
+        # Sleep interval follows last refresh outcome, not stale source labels.
+        last_refresh_ok = self._voices_source == "network" and bool(self._voices)
         while True:
             try:
-                if self._voices_source == "network" and self._voices:
-                    # Healthy: re-check daily-ish without hammering
+                if last_refresh_ok and self._voices:
                     await asyncio.sleep(VOICE_FRESH_S)
                 else:
                     await asyncio.sleep(self._voice_backoff_s)
                 ok = await self._fetch_voices_live()
+                last_refresh_ok = ok
                 if not ok:
                     self._voice_backoff_s = min(
                         self._voice_backoff_s * 2, float(VOICE_BACKOFF_MAX_S)
@@ -421,6 +423,7 @@ class TTSService:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                last_refresh_ok = False
                 log.warning("voice refresh loop error: %s", _exc_name(exc))
                 await asyncio.sleep(self._voice_backoff_s)
 

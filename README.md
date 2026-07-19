@@ -10,6 +10,6 @@ Specification groundwork for the full system has been laid, you can see it in AG
 
 ### Why slop?
 
-I consider this to be a perfect usecase for LLMs: making a patchwork to connect two things together. Furthermore, I have idea how long the edge-tts workarounds will continue to work in their current state, and so having an LLM write the main part of this in Python will aid in rapid updates.
+I consider this to be a perfect use case for LLMs: making a patchwork to connect two things together. Furthermore, I have no idea how long the edge-tts workarounds will continue to work in their current state, and so having an LLM write the main part of this in Python will aid in rapid updates.
 
 I am not sure how well it will write a browser extension! We'll have to see. It's a little adventure.

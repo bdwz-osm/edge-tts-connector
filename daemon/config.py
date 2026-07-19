@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 import secrets
 import socket
@@ -214,6 +215,26 @@ def _valid_secret(value: object) -> str | None:
     return s
 
 
+def _require_int(
+    value: object,
+    name: str,
+    *,
+    minimum: int | None = None,
+    maximum: int | None = None,
+) -> int:
+    try:
+        if isinstance(value, bool):
+            raise TypeError
+        num = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(f"config {name} must be an integer") from exc
+    if minimum is not None and num < minimum:
+        raise SystemExit(f"config {name} must be >= {minimum}, got {num}")
+    if maximum is not None and num > maximum:
+        raise SystemExit(f"config {name} must be <= {maximum}, got {num}")
+    return num
+
+
 def flatten_toml(raw: dict) -> dict:
     """Flatten sectioned TOML; also accept legacy flat keys."""
     out: dict = {}
@@ -250,10 +271,17 @@ def render_full_config(secret: str) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _chmod_private(path: Path) -> None:
+    try:
+        path.chmod(0o600)
+    except OSError as exc:
+        print(f"warning: could not chmod 0600 {path}: {exc}", file=sys.stderr)
+
+
 def write_full_config(config_path: Path, secret: str) -> None:
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(render_full_config(secret), encoding="utf-8")
-    config_path.chmod(0o600)
+    _chmod_private(config_path)
 
 
 _SECRET_LINE_RE = re.compile(
@@ -308,10 +336,7 @@ def ensure_config(config_path: Path) -> EnsureResult:
     secret = secrets.token_urlsafe(32)
     new_text = inject_secret(text, secret)
     config_path.write_text(new_text, encoding="utf-8")
-    try:
-        config_path.chmod(0o600)
-    except OSError:
-        pass
+    _chmod_private(config_path)
     flat["secret"] = secret
     return EnsureResult(
         data=flat,
@@ -338,36 +363,61 @@ def load_config(config_path: Path | None = None, pidfile: Path | None = None) ->
     if not _is_loopback(host):
         raise SystemExit(f"config host must be loopback, got {host!r}")
 
-    workers = int(merged["workers"])
-    if workers < 1 or workers > 3:
-        raise SystemExit(f"config workers must be in [1, 3], got {workers}")
+    workers = _require_int(merged["workers"], "workers", minimum=1, maximum=3)
+    port = _require_int(merged["port"], "port", minimum=1, maximum=65535)
+    max_text_chars = _require_int(merged["max_text_chars"], "max_text_chars", minimum=1)
+    request_queue_max = _require_int(
+        merged["request_queue_max"], "request_queue_max", minimum=1
+    )
+    synth_retries = _require_int(merged["synth_retries"], "synth_retries", minimum=1)
+    min_audio_bytes = _require_int(merged["min_audio_bytes"], "min_audio_bytes", minimum=1)
+    cache_max_bytes = _require_int(merged["cache_max_bytes"], "cache_max_bytes", minimum=1)
 
     cache_dir = Path(str(merged["cache_dir"]))
+    if not str(merged["cache_dir"]).strip():
+        raise SystemExit("config cache.dir must be non-empty")
     if not cache_dir.is_absolute():
         cache_dir = (config_path.parent / cache_dir).resolve()
 
-    backoff = merged["synth_retry_backoff_s"]
-    if not isinstance(backoff, list) or not backoff:
+    backoff_raw = merged["synth_retry_backoff_s"]
+    if not isinstance(backoff_raw, list) or not backoff_raw:
         raise SystemExit("config synth.retry_backoff_s must be a non-empty list")
+    backoff: list[float] = []
+    for i, item in enumerate(backoff_raw):
+        try:
+            val = float(item)
+        except (TypeError, ValueError) as exc:
+            raise SystemExit(
+                f"config synth.retry_backoff_s[{i}] must be a number"
+            ) from exc
+        if not math.isfinite(val) or val < 0:
+            raise SystemExit(
+                f"config synth.retry_backoff_s[{i}] must be a finite number >= 0"
+            )
+        backoff.append(val)
 
     secret = _valid_secret(merged.get("secret"))
     if secret is None:
         raise SystemExit("config auth.secret is missing or placeholder")
 
+    default_voice = str(merged["default_voice"]).strip()
+    if not default_voice:
+        raise SystemExit("config synth.default_voice must be non-empty")
+
     daemon_dir = Path(__file__).resolve().parent
     return Config(
         host=host,
-        port=int(merged["port"]),
+        port=port,
         secret=secret,
         workers=workers,
-        default_voice=str(merged["default_voice"]),
+        default_voice=default_voice,
         cache_dir=cache_dir,
-        cache_max_bytes=int(merged["cache_max_bytes"]),
-        max_text_chars=int(merged["max_text_chars"]),
-        request_queue_max=int(merged["request_queue_max"]),
-        synth_retries=int(merged["synth_retries"]),
-        synth_retry_backoff_s=tuple(float(x) for x in backoff),
-        min_audio_bytes=int(merged["min_audio_bytes"]),
+        cache_max_bytes=cache_max_bytes,
+        max_text_chars=max_text_chars,
+        request_queue_max=request_queue_max,
+        synth_retries=synth_retries,
+        synth_retry_backoff_s=tuple(backoff),
+        min_audio_bytes=min_audio_bytes,
         config_path=config_path.resolve(),
         pidfile=pidfile.resolve(),
         voices_cache_path=daemon_dir / "voices-cache.json",
