@@ -1,5 +1,11 @@
 # DECISIONS
 
+## 2026-07-19 — Firefox audio/ended must not use runtime.sendMessage
+
+- FF playback is an `Audio` in the background frame (`audioBridge.ts`). `runtime.sendMessage({ type: "audio/ended" })` does not deliver to the same frame, so auto-advance never ran (manual Next worked).
+- Chrome is fine: offscreen is a separate document and messages the SW.
+- Fix: `setAudioLifecycleHandlers({ onEnded, onError })` wired from `background.ts` → `onAudioEnded` / `onAudioError`. Offscreen path unchanged.
+
 ## 2026-07-18 — Daemon v1 (build-order step 1)
 
 - **Logging:** `run.sh start` redirects daemon stdout/stderr to `daemon/daemon.log` (gitignored). Not specified in plan; needed for crash diagnosis.

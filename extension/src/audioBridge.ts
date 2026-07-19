@@ -15,20 +15,27 @@ let ffObjectUrl: string | null = null;
 let ffKeepalive: HTMLAudioElement | null = null;
 let chromeOffscreenReady: Promise<void> | null = null;
 
+/** FF plays in-background; runtime.sendMessage does not re-enter the same frame. */
+let endedHandler: (() => void) | null = null;
+let errorHandler: ((message: string) => void) | null = null;
+
+export function setAudioLifecycleHandlers(handlers: {
+  onEnded: () => void;
+  onError: (message: string) => void;
+}): void {
+  endedHandler = handlers.onEnded;
+  errorHandler = handlers.onError;
+}
+
 function getFfAudio(): HTMLAudioElement {
   if (!ffAudio) {
     ffAudio = new Audio();
     ffAudio.preload = "auto";
     ffAudio.addEventListener("ended", () => {
-      void browser.runtime.sendMessage({ type: "audio/ended" }).catch(() => {});
+      endedHandler?.();
     });
     ffAudio.addEventListener("error", () => {
-      void browser.runtime
-        .sendMessage({
-          type: "audio/error",
-          message: ffAudio?.error?.message ?? "audio error",
-        })
-        .catch(() => {});
+      errorHandler?.(ffAudio?.error?.message ?? "audio error");
     });
   }
   return ffAudio;

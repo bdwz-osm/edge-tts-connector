@@ -25,7 +25,7 @@ import {
   onVoiceOrRateChange,
 } from "./session";
 import type { Chunk, ChunkMode } from "./chunk";
-import { audioKeepalive } from "./audioBridge";
+import { audioKeepalive, setAudioLifecycleHandlers } from "./audioBridge";
 import {
   injectContent,
   markContentReady,
@@ -33,6 +33,16 @@ import {
 } from "./contentReady";
 
 declare const __BROWSER__: "chrome" | "firefox";
+
+// Firefox Audio lives in this frame — call session directly (sendMessage won't).
+setAudioLifecycleHandlers({
+  onEnded: () => {
+    void onAudioEnded();
+  },
+  onError: (message) => {
+    void onAudioError(message);
+  },
+});
 
 const MENU_READ_FROM_HERE = "edge-tts-read-from-here";
 
