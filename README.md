@@ -25,8 +25,12 @@ Using this system will generate cached audio clips in `tts-cache`. By default, t
 
 The extension is likely going to have more difficulty parsing some pages more than others. However, on the pages I've tried, its rules somehow manage to actually find the content you want to read away from all the random clutter. But its current state, the extension will likely jump to some stupid stuff in the body.
 
+### Is it stable?
+
+Reasonably. I can't read all the code, it's very complex for something I just put down in a day. Most of the benefit comes from the thorough pre-outlining done in the pre-building stage, as well as the grilling I had the model do when it came to all the implementation details. I'm still going to keep working on it! I just need to rest.
+
 ### Why slop?
 
 I consider this to be a perfect use case for LLMs: making a patchwork to connect two things together. Furthermore, I have no idea how long the edge-tts workarounds will continue to work in their current state, and so having an LLM write the main part of this in Python will aid in rapid updates.
 
-I am not sure how well it will write a browser extension! We'll have to see. It's a little adventure.
+The code was written using Grok 4.5 in OpenCode harness, and reviewed using CodeRabbit.
