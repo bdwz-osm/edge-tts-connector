@@ -1,4 +1,4 @@
-// Chunk algorithm — implemented in step 3 (see spec/reader.md).
+// Chunk algorithm — implemented in step 3 (see .spec/reader.md).
 
 export type Chunk = {
   i: number;

@@ -1,4 +1,4 @@
-/** Refuse activate on privileged / PDF-ish URLs (spec/extension.md). */
+/** Refuse activate on privileged / PDF-ish URLs (.spec/extension.md). */
 
 const BLOCKED_PREFIXES = [
   "chrome:",

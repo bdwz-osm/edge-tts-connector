@@ -7,12 +7,12 @@ Local screen-reader-style TTS for Chromium + Firefox. Extension never hits the n
 | Doc | Contents |
 |-----|----------|
 | **this file** | goals, architecture, daemon ops, defaults, build order |
-| [`spec/rpc.md`](spec/rpc.md) | HTTP wire + curl examples + extension message types + error/retry map |
-| [`spec/reader.md`](spec/reader.md) | chunk algorithm, session state machine, buffer/highlight |
-| [`spec/extension.md`](spec/extension.md) | manifests, build, AudioBridge, settings/UI |
-| [`spec/edge-tts-errors.md`](spec/edge-tts-errors.md) | library exception inventory (reference only) |
+| [`.spec/rpc.md`](.spec/rpc.md) | HTTP wire + curl examples + extension message types + error/retry map |
+| [`.spec/reader.md`](.spec/reader.md) | chunk algorithm, session state machine, buffer/highlight |
+| [`.spec/extension.md`](.spec/extension.md) | manifests, build, AudioBridge, settings/UI |
+| [`.spec/edge-tts-errors.md`](.spec/edge-tts-errors.md) | library exception inventory (reference only) |
 
-Implement against **project + rpc + reader + extension**. If conflict: `project.md` wins on product intent; wire details win in `spec/rpc.md` et al. `edge-tts-errors.md` is not product law — use it to avoid thrashing/mis-handling library failures.
+Implement against **project + rpc + reader + extension**. If conflict: `project.md` wins on product intent; wire details win in `.spec/rpc.md` et al. `edge-tts-errors.md` is not product law — use it to avoid thrashing/mis-handling library failures.
 
 ## Goals / non-goals
 
@@ -24,7 +24,7 @@ Implement against **project + rpc + reader + extension**. If conflict: `project.
 
 ```
 project.md
-spec/rpc.md  spec/reader.md  spec/extension.md
+.spec/rpc.md  .spec/reader.md  .spec/extension.md
 README.md
 DEPENDENCIES.sh              # PYTHON_VERSION=… (manual bump)
 server.sh                    # → daemon/run.sh start|stop
@@ -34,7 +34,7 @@ daemon/
   server.py  tts.py  cache.py  config.py
   voices-cache.json          # runtime gitignore
   venv/  edge-tts-connector.pid
-extension/                   # see spec/extension.md → dist/chrome|firefox/
+extension/                   # see .spec/extension.md → dist/chrome|firefox/
 tts-cache/<voice>/<hash>.mp3
 ```
 
@@ -49,7 +49,7 @@ tts-cache/<voice>/<hash>.mp3
 ```
 
 - Playback **only** in extension (Chrome offscreen / FF bg `Audio`). Content: anchors, highlight, scroll, toasts for **current** chunk only.
-- Audio: auth `fetch` → `blob:` URL (never secret in `src`). Details: `spec/rpc.md`.
+- Audio: auth `fetch` → `blob:` URL (never secret in `src`). Details: `.spec/rpc.md`.
 - Port **24765** fixed both sides; host always `127.0.0.1` (not `localhost`).
 
 ### Knob ownership
@@ -105,17 +105,17 @@ Reject non-loopback host; workers ∈ [1,3]. **No daemon synth wall-clock timeou
 
 ### Runtime rules
 
-- **Voices:** startup live `list_voices()` → on success write `daemon/voices-cache.json` + memory; on failure load disk cache. `GET /voices` envelope + `voices_unavailable` in [`spec/rpc.md`](spec/rpc.md). Background recache while failing: backoff 5 min … 30 min cap. `stale` when data older than 24h (warn in UI after startup refresh attempt).
+- **Voices:** startup live `list_voices()` → on success write `daemon/voices-cache.json` + memory; on failure load disk cache. `GET /voices` envelope + `voices_unavailable` in [`.spec/rpc.md`](.spec/rpc.md). Background recache while failing: backoff 5 min … 30 min cap. `stale` when data older than 24h (warn in UI after startup refresh attempt).
 - **Voice gate:** if in-memory list is fresh (≤24h) and non-empty, unknown ShortName → 400; otherwise allow any well-formed ShortName.
 - Synth: one new `Communicate` per attempt (`rate`, `pitch`, `volume="+0%"`). Rate discrete **−50%…+100%** step 10%; pitch default `+0Hz`. Body `priority`: `play` \| `prefetch`.
 - **No poison cache:** write `*.part` only; unlink on fail; rename only if bytes ≥ `min_audio_bytes` and not `NoAudioReceived`; purge existing too-small finals; never `ready` without good final file.
-- **Errors/retries:** typed classify + budgets + circuit breaker in [`spec/rpc.md`](spec/rpc.md). Play uses config `retries`; prefetch max 2 attempts. Do not `wait_for` around edge-tts. Coalesce in-flight by cache id. Parallel synth requests OK (worker semaphore).
-- Cache path: `tts-cache/<voice>/<md5(rate,pitch,text)>.mp3` — formula in `spec/rpc.md`. LRU by mtime to cap. Semaphore(workers).
-- Routes/CORS/auth/Voice DTO: **`spec/rpc.md` only**. Library oddities: [`spec/edge-tts-errors.md`](spec/edge-tts-errors.md) reference only.
+- **Errors/retries:** typed classify + budgets + circuit breaker in [`.spec/rpc.md`](.spec/rpc.md). Play uses config `retries`; prefetch max 2 attempts. Do not `wait_for` around edge-tts. Coalesce in-flight by cache id. Parallel synth requests OK (worker semaphore).
+- Cache path: `tts-cache/<voice>/<md5(rate,pitch,text)>.mp3` — formula in `.spec/rpc.md`. LRU by mtime to cap. Semaphore(workers).
+- Routes/CORS/auth/Voice DTO: **`.spec/rpc.md` only**. Library oddities: [`.spec/edge-tts-errors.md`](.spec/edge-tts-errors.md) reference only.
 
 ## Extension (summary)
 
-Full detail: [`spec/extension.md`](spec/extension.md), [`spec/reader.md`](spec/reader.md).
+Full detail: [`.spec/extension.md`](.spec/extension.md), [`.spec/reader.md`](.spec/reader.md).
 
 - MV3 Chrome + Firefox; inject on activate; refuse privileged/PDF URLs; main frame only.
 - Lang list from voices present only; `Intl.DisplayNames`; voice = `ShortName` id.
@@ -145,9 +145,9 @@ Local+secret abuse (accepted); `/health` open; CORS extension-origin only; no pa
 
 ## Build order
 
-1. **Daemon** — DEPENDENCIES, run.sh, config/secret, routes per `spec/rpc.md`, errors, atomic cache, curl acceptance  
-2. **Extension shell** — manifests/build per `spec/extension.md`, options secret, popup health  
-3. **Read path** — `spec/reader.md` chunk/session + AudioBridge + blob play  
+1. **Daemon** — DEPENDENCIES, run.sh, config/secret, routes per `.spec/rpc.md`, errors, atomic cache, curl acceptance  
+2. **Extension shell** — manifests/build per `.spec/extension.md`, options secret, popup health  
+3. **Read path** — `.spec/reader.md` chunk/session + AudioBridge + blob play  
 4. **Buffer + UX** — prefetch, selection, context menu, lang/voice, speeds  
 5. **Polish** — keepalive, shortcuts gate, dark UI, README  
 6. **Optional** — example user unit  

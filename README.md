@@ -8,7 +8,7 @@ Local in-browser TTS reader (Linux-first) branded **etc Speech**. Uses the `edge
 
 - **Daemon (step 1):** `./server.sh start|stop` — see `project.md` / `daemon/`.
 - **Extension shell (step 2):** `cd extension && npm i && npm run build` → load `extension/dist/chrome/` or `extension/dist/firefox/`. Options: paste secret + test connection. Popup: daemon health / secret status. Read path not wired yet.
-- Specs: `AGENTS.md`, `project.md`, `spec/`.
+- Specs: `AGENTS.md`, `project.md`, `.spec/`.
 
 ### Why slop?
 

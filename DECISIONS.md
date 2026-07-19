@@ -23,7 +23,7 @@
 
 ## 2026-07-18 — edge-tts errors, voices cache, retry budgets
 
-- **Guide role:** `spec/edge-tts-errors.md` is inventory only; product mapping lives in `spec/rpc.md` (screen-reader calm: no thrash, offline banner, skip bad play chunk).
+- **Guide role:** `.spec/edge-tts-errors.md` is inventory only; product mapping lives in `.spec/rpc.md` (screen-reader calm: no thrash, offline banner, skip bad play chunk).
 - **No daemon `wait_for` on synth:** removed `synth_timeout_s`; edge-tts owns socket timeouts; extension owns UX abandon. Late finishes may still fill MP3 cache.
 - **`priority`:** `play` \| `prefetch` on `POST /v1/synth`. Play → config `retries`; prefetch → max 2 attempts.
 - **HTTP 403 single mapping:** always wire `upstream_offline` + circuit clock/auth strike (never `upstream_reject`). Library may retry 403 once inside one `Communicate`; mass 403/`SkewAdjustmentError` → breaker 3 strikes / 5 min open.
@@ -55,3 +55,7 @@
 - **Stubs:** `content.ts`, `chunk.ts`, `offscreen.ts`/`audioBridge.ts`, context-menu handler no-op beyond restricted-URL guard.
 - **Browser define:** esbuild `__BROWSER__` (`chrome`|`firefox`) for later AudioBridge split; Firefox build omits offscreen entry/html.
 - **dist/ + node_modules gitignored;** commit `package-lock.json`.
+
+## 2026-07-18 — Rename `spec/` → `.spec/`
+
+- Hidden dir so repo-root tab-complete reaches `server.sh` without competing with `spec/`. Paths updated in `AGENTS.md`, `project.md`, `README.md`, and code comments.
