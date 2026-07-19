@@ -1,0 +1,13 @@
+/config.toml
+daemon/config.toml
+daemon/config.json
+daemon/venv/
+daemon/.venv/
+daemon/edge-tts-connector.pid
+daemon/daemon.log
+daemon/__pycache__/
+tts-cache/
+__pycache__/
+*.pyc
+*.pyo
+.Python

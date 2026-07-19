@@ -26,10 +26,12 @@ project.md
 spec/rpc.md  spec/reader.md  spec/extension.md
 README.md
 DEPENDENCIES.sh              # PYTHON_VERSION=… (manual bump)
+server.sh                    # → daemon/run.sh start|stop
+config.toml                  # runtime ops config (gitignore)
 daemon/
-  run.sh  requirements.txt  config.example.json
+  run.sh  requirements.txt
   server.py  tts.py  cache.py  config.py
-  edge-tts-connector.pid     # runtime gitignore
+  venv/  edge-tts-connector.pid
 extension/                   # see spec/extension.md → dist/
 tts-cache/<voice>/<hash>.mp3
 ```
@@ -52,7 +54,7 @@ tts-cache/<voice>/<hash>.mp3
 
 | Knob | Owner |
 |------|--------|
-| secret, workers, cache cap, timeouts, retries, min_audio_bytes | daemon `config.json` |
+| secret, workers, cache cap, timeouts, retries, min_audio_bytes | daemon `config.toml` |
 | port/host | hardcoded v1 |
 | voice, lang, gen speed, volume, playback speed, keepalive, buffers | extension settings |
 | pitch | fixed `+0Hz` on wire v1; still in cache hash |
@@ -67,30 +69,31 @@ tts-cache/<voice>/<hash>.mp3
 PYTHON_VERSION=3.12.8
 ```
 
-`./run.sh start|stop` (default start). Sources `../DEPENDENCIES.sh`.
+`./server.sh start|stop` (default start; wraps `daemon/run.sh`). Sources `../DEPENDENCIES.sh`.
 
-**start:** uv → `uv python install` + `uv venv --python $PYTHON_VERSION`; else `python3` major.minor ≥ pin, `python3 -m venv`. Install reqs (`uv pip`|`pip`). Gen `config.json` + secret `0600` if missing (print once). Pidfile after bind. Port busy → hard fail.
+**start:** uv → `uv python install` + `uv venv --python $PYTHON_VERSION` at `daemon/venv`; else `python3` major.minor ≥ pin, `python3 -m venv`. Install reqs (`uv pip`|`pip`). Ensure repo-root `config.toml` (`0600`): create full commented template with generated `[auth].secret` if missing; if present but secret missing/invalid, inject a new secret and warn. Print secret on start. Pidfile after bind. Port busy → hard fail.
 
 **stop:** pidfile TERM→KILL; friendly no-op. Optional later: example user unit (no systemd runtime dep).
 
-### config.json (ops-only)
+### config.toml (ops-only, repo root)
 
-```json
-{
-  "host": "127.0.0.1",
-  "port": 24765,
-  "secret": "<generated>",
-  "workers": 2,
-  "default_voice": "en-US-EmmaMultilingualNeural",
-  "cache_dir": "../tts-cache",
-  "cache_max_bytes": 1073741824,
-  "max_text_chars": 2000,
-  "request_queue_max": 32,
-  "synth_timeout_s": 90,
-  "synth_retries": 3,
-  "synth_retry_backoff_s": [0.5, 1.5, 3.0],
-  "min_audio_bytes": 256
-}
+Sectioned TOML. **Required:** `[auth].secret`. All other knobs are code defaults; the generated file lists them commented under `[server]`, `[synth]`, `[cache]`.
+
+```toml
+[auth]
+secret = "<generated>"
+
+[server]
+# host = "127.0.0.1"
+# port = 24765
+
+[synth]
+# workers = 2
+# …
+
+[cache]
+# dir = "tts-cache"
+# …
 ```
 
 Reject non-loopback host; workers ∈ [1,3].
@@ -144,7 +147,9 @@ Handoff: implement **one build-order step per session**; do not freestyle archit
 
 ## v1 checklist
 
-- [ ] run.sh start/stop, :24765, secret  
+- [ ] server.sh / run.sh start/stop, :24765, secret  
+
+
 - [ ] rpc.md curl suite green (health/voices/synth/audio/errors)  
 - [ ] no empty/partial finals; LRU  
 - [ ] extension blob play; highlight; buffer; selection; Read From Here  

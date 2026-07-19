@@ -42,7 +42,7 @@ path = tts-cache/<voice>/<id>.mp3
 ### curl examples
 
 ```bash
-TOKEN=…  # from daemon config.json
+TOKEN=…  # from repo-root config.toml → auth.secret
 H=(-H "X-Auth-Token: $TOKEN" -H "Content-Type: application/json")
 
 curl -s "http://127.0.0.1:24765/health"
