@@ -37,6 +37,11 @@
 - **Scope:** unit/component tests for cache poison/LRU, config validation, exception classify/retry/circuit, synth validation, HTTP auth/CORS/routes with mocked TTS. No live Microsoft calls.
 - **Not a build-order gate:** curl acceptance remains the step-1 bar; tests are optional local insurance.
 
+## 2026-07-19 — pickRoot must not crown code blocks
+
+- Flat pages (Beej’s Guide: no `article`/`main`, only `.sourceCode` divs + body children) made argmax `textLen - 2*linkText` pick the largest code wrapper (no links → high score). Reading started at first `<pre>`.
+- Fix: body is the baseline score; candidates must beat body; skip code-ish roots (`.sourceCode`, `pre`, …); min textLen 200.
+
 ## 2026-07-19 — Blob URLs not in service worker
 
 - Chrome MV3 SW has no `URL.createObjectURL`. Background keeps `Blob`; `audio/play` sends **base64** + mimeType to offscreen (Blob/ArrayBuffer messaging was unreliable). Offscreen decodes → Blob → object URL → play.

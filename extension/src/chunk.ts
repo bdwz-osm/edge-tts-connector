@@ -49,6 +49,10 @@ function linkTextLen(el: Element): number {
   return n;
 }
 
+/** Skip code-sample wrappers — they score high (text, no links) but are not the page root. */
+const CODE_ROOT_SKIP =
+  "pre, code, .sourceCode, .highlight, .syntax, .hljs, [class*='highlight']";
+
 export function pickRoot(doc: Document): Element {
   const body = doc.body;
   if (!body) return doc.documentElement;
@@ -58,17 +62,28 @@ export function pickRoot(doc: Document): Element {
     if (el && textLen(el) > 200 && !isExcluded(el)) return el;
   }
 
-  let best: Element | null = null;
-  let bestScore = -Infinity;
+  // Baseline: body itself. A div must beat body to win — otherwise flat
+  // pages (e.g. Beej) crown a .sourceCode block as "root" and reading
+  // starts mid-document at the first <pre>.
+  let best: Element = body;
+  let bestScore = textLen(body) - 2 * linkTextLen(body);
+
   for (const el of body.querySelectorAll("div, section, main")) {
     if (isExcluded(el)) continue;
-    const score = textLen(el) - 2 * linkTextLen(el);
+    if (el.matches(CODE_ROOT_SKIP)) continue;
+    // Thin wrappers whose only real content is a <pre>
+    if (el.querySelector(":scope > pre, :scope > code") && textLen(el) < 500) {
+      continue;
+    }
+    const tl = textLen(el);
+    if (tl < 200) continue;
+    const score = tl - 2 * linkTextLen(el);
     if (score > bestScore) {
       bestScore = score;
       best = el;
     }
   }
-  return best ?? body;
+  return best;
 }
 
 function isVisible(el: Element): boolean {

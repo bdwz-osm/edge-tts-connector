@@ -15,9 +15,14 @@ EXCLUDE  = nav, aside, footer, header, script, style, noscript, iframe, svg,
 function pickRoot(doc):
   for sel in [article, [role=main], main]:
     if el = doc.querySelector(sel) and textLen(el) > 200: return el
-  return argmax over doc.body descendants div/section/main:
+  // Baseline score = body. Candidate must beat body (else flat pages pick
+  // a .sourceCode/<pre> wrapper — high text, zero links — and skip the top).
+  best = body; bestScore = textLen(body) - 2*linkTextLen(body)
+  for el in body descendants div/section/main:
+    skip EXCLUDE, code wrappers (.sourceCode/pre/code/highlight), tl < 200
     score = textLen(el) - 2*linkTextLen(el)
-    skip if el matches EXCLUDE or inside EXCLUDE
+    if score > bestScore: best = el
+  return best
 
 function visibleText(el):
   // innerText-like: skip display:none / visibility:hidden; collapse whitespace
