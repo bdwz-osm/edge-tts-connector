@@ -116,7 +116,10 @@ async function handleMessage(
         prev.volume !== next.volume ||
         prev.playbackSpeed !== next.playbackSpeed
       ) {
-        await applyLiveGain(next);
+        await applyLiveGain({
+          volume: next.volume,
+          playbackSpeed: next.playbackSpeed,
+        });
       }
       if (prev.voice !== next.voice || prev.genSpeed !== next.genSpeed) {
         await onVoiceOrRateChange();
@@ -125,6 +128,16 @@ async function handleMessage(
         await audioKeepalive(false);
       }
       return next;
+    }
+    case "popup/liveGain": {
+      // Drag path: cache + Audio only — no storage.local write per input event.
+      const opts: { volume?: number; playbackSpeed?: number } = {};
+      if (typeof msg.volume === "number") opts.volume = msg.volume;
+      if (typeof msg.playbackSpeed === "number") {
+        opts.playbackSpeed = msg.playbackSpeed;
+      }
+      await applyLiveGain(opts);
+      return { ok: true };
     }
     case "options/testConnection":
     case "popup/probe":

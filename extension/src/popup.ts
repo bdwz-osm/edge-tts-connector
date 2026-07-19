@@ -132,10 +132,15 @@ async function refresh() {
     applying = true;
     try {
       genSpeedSel.value = settings.genSpeed;
-      playbackEl.value = String(settings.playbackSpeed);
-      playbackOut.textContent = settings.playbackSpeed.toFixed(2);
-      volumeEl.value = String(settings.volume);
-      volumeOut.textContent = String(Math.round(settings.volume * 100));
+      // Don't yank knobs mid-drag (refresh polls every 1.5s).
+      if (document.activeElement !== playbackEl) {
+        playbackEl.value = String(settings.playbackSpeed);
+        playbackOut.textContent = settings.playbackSpeed.toFixed(2);
+      }
+      if (document.activeElement !== volumeEl) {
+        volumeEl.value = String(settings.volume);
+        volumeOut.textContent = String(Math.round(settings.volume * 100));
+      }
       keepaliveEl.checked = settings.audioKeepalive;
     } finally {
       applying = false;
@@ -306,8 +311,26 @@ genSpeedSel.addEventListener("change", () => {
   })();
 });
 
+async function liveGain(patch: {
+  volume?: number;
+  playbackSpeed?: number;
+}): Promise<void> {
+  if (settings) {
+    if (patch.volume !== undefined) settings.volume = patch.volume;
+    if (patch.playbackSpeed !== undefined) {
+      settings.playbackSpeed = patch.playbackSpeed;
+    }
+  }
+  await send({ type: "popup/liveGain", ...patch });
+}
+
 playbackEl.addEventListener("input", () => {
-  playbackOut.textContent = Number(playbackEl.value).toFixed(2);
+  if (applying) return;
+  const v = Number(playbackEl.value);
+  playbackOut.textContent = v.toFixed(2);
+  void liveGain({ playbackSpeed: v }).catch((e) => {
+    showBanner(e instanceof Error ? e.message : String(e));
+  });
 });
 playbackEl.addEventListener("change", () => {
   if (applying) return;
@@ -317,7 +340,12 @@ playbackEl.addEventListener("change", () => {
 });
 
 volumeEl.addEventListener("input", () => {
-  volumeOut.textContent = String(Math.round(Number(volumeEl.value) * 100));
+  if (applying) return;
+  const v = Number(volumeEl.value);
+  volumeOut.textContent = String(Math.round(v * 100));
+  void liveGain({ volume: v }).catch((e) => {
+    showBanner(e instanceof Error ? e.message : String(e));
+  });
 });
 volumeEl.addEventListener("change", () => {
   if (applying) return;

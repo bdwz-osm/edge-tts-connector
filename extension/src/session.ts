@@ -275,11 +275,33 @@ export async function onAudioError(message: string): Promise<void> {
   await nextChunk();
 }
 
-export async function applyLiveGain(settings: Settings): Promise<void> {
-  await audioSetGain({
-    volume: settings.volume,
-    playbackSpeed: settings.playbackSpeed,
-  });
+/** Last UI gain — survives chunk boundaries; storage may lag behind drag. */
+let playbackGain: { volume: number; playbackSpeed: number } | null = null;
+
+async function ensurePlaybackGain(): Promise<{
+  volume: number;
+  playbackSpeed: number;
+}> {
+  if (playbackGain) return playbackGain;
+  const s = await getSettings();
+  playbackGain = { volume: s.volume, playbackSpeed: s.playbackSpeed };
+  return playbackGain;
+}
+
+async function resolvePlaybackGain(): Promise<{
+  volume: number;
+  playbackSpeed: number;
+}> {
+  return ensurePlaybackGain();
+}
+
+export async function applyLiveGain(
+  opts: { volume?: number; playbackSpeed?: number },
+): Promise<void> {
+  const g = await ensurePlaybackGain();
+  if (opts.volume !== undefined) g.volume = opts.volume;
+  if (opts.playbackSpeed !== undefined) g.playbackSpeed = opts.playbackSpeed;
+  await audioSetGain(g);
 }
 
 export async function onVoiceOrRateChange(): Promise<void> {
@@ -457,10 +479,18 @@ async function playCurrent(): Promise<void> {
   try {
     await audioEnsure();
     const epoch = ++s.audioEpoch;
+    // Prefer live cache (knob may be ahead of storage).
+    if (!playbackGain) {
+      playbackGain = {
+        volume: settings.volume,
+        playbackSpeed: settings.playbackSpeed,
+      };
+    }
+    const gain = playbackGain;
     await audioPlay({
       blob: entry.blob,
-      volume: settings.volume,
-      playbackSpeed: settings.playbackSpeed,
+      volume: gain.volume,
+      playbackSpeed: gain.playbackSpeed,
     });
     if (session === s && gen === s.playGen && s.audioEpoch === epoch) {
       setStatus("playing");
@@ -506,14 +536,14 @@ async function handlePlayFailure(
     const retry = await waitReady(s.index, gen);
     if (session !== s || gen !== s.playGen) return;
     if (retry?.state === "ready" && retry.blob) {
-      const settings = await getSettings();
+      const gain = await resolvePlaybackGain();
       const epoch = ++s.audioEpoch;
       await audioEnsure();
       if (session !== s || gen !== s.playGen) return;
       await audioPlay({
         blob: retry.blob,
-        volume: settings.volume,
-        playbackSpeed: settings.playbackSpeed,
+        volume: gain.volume,
+        playbackSpeed: gain.playbackSpeed,
       });
       if (session === s && gen === s.playGen && s.audioEpoch === epoch) {
         setStatus("playing");
