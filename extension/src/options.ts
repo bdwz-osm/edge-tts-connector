@@ -203,7 +203,6 @@ saveBtn.addEventListener("click", () => {
         patch: { secret: secretInput.value.trim() },
       });
       flash("Saved.", "ok");
-      await runProbe();
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), "err");
     } finally {
