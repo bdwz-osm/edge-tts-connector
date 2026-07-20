@@ -23,9 +23,14 @@ import {
   handleContentGone,
   applyLiveGain,
   onVoiceOrRateChange,
+  setSessionPulseHooks,
 } from "./session";
 import type { Chunk, ChunkMode } from "./chunk";
-import { audioKeepalive, setAudioLifecycleHandlers } from "./audioBridge";
+import {
+  audioKeepalive,
+  audioPlaybackPulse,
+  setAudioLifecycleHandlers,
+} from "./audioBridge";
 import {
   injectContent,
   markContentReady,
@@ -59,8 +64,72 @@ setAudioLifecycleHandlers({
 
 const MENU_READ_FROM_HERE = "edge-tts-read-from-here";
 const MENU_READ_SELECTION = "edge-tts-read-selection";
+/** Wake Firefox event page during long TTS so bg Audio is not frozen forever. */
+const ALARM_PLAY_PULSE = "etc-play-pulse";
 
 type Msg = { type: string; [k: string]: unknown };
+
+/** Content ports that pin the Firefox event page for the duration of a session. */
+const playbackPorts = new Set<browser.Runtime.Port>();
+
+browser.runtime.onConnect.addListener((port) => {
+  if (port.name !== "etc-playback") return;
+  playbackPorts.add(port);
+  port.onDisconnect.addListener(() => {
+    playbackPorts.delete(port);
+  });
+});
+
+function armPlayPulse() {
+  try {
+    // ~25s — under typical 30s event-page idle; Chrome may clamp to 1m.
+    void browser.alarms.create(ALARM_PLAY_PULSE, { periodInMinutes: 25 / 60 });
+  } catch {
+    /* */
+  }
+  void tellContentHoldPort(true);
+}
+
+function clearPlayPulse() {
+  void browser.alarms.clear(ALARM_PLAY_PULSE).catch(() => {});
+  // Drop ports from this side (session may already be null).
+  for (const p of [...playbackPorts]) {
+    try {
+      p.disconnect();
+    } catch {
+      /* */
+    }
+  }
+  playbackPorts.clear();
+  void tellContentHoldPort(false);
+}
+
+async function tellContentHoldPort(on: boolean): Promise<void> {
+  const s = getSession();
+  if (!s) return;
+  try {
+    await browser.tabs.sendMessage(s.tabId, { type: "content/holdPort", on });
+  } catch {
+    /* content gone */
+  }
+}
+
+browser.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== ALARM_PLAY_PULSE) return;
+  const s = getSession();
+  if (!s || (s.status !== "playing" && s.status !== "paused")) {
+    clearPlayPulse();
+    return;
+  }
+  if (s.status === "playing") audioPlaybackPulse();
+  // Re-assert port if content lost it (script reinject).
+  if (playbackPorts.size === 0) void tellContentHoldPort(true);
+});
+
+setSessionPulseHooks({
+  arm: armPlayPulse,
+  clear: clearPlayPulse,
+});
 
 function installMenus() {
   void browser.contextMenus.removeAll().then(() => {
@@ -107,11 +176,19 @@ browser.tabs.onRemoved.addListener((tabId) => {
 });
 
 browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.status === "loading") {
+  // Real navigation / reload. Ignore title-only and other noise.
+  // url set → navigated; status loading without url → reload/same-doc start.
+  const navigated = typeof changeInfo.url === "string";
+  const loading = changeInfo.status === "loading";
+  if (!navigated && !loading) return;
+
+  if (loading || navigated) {
     clearContentReady(tabId);
-    const s = getSession();
-    if (s && s.tabId === tabId) void destroySession();
   }
+  const s = getSession();
+  if (!s || s.tabId !== tabId) return;
+  // Drop session only on main-tab document load/navigation, not favicon noise.
+  if (loading || navigated) void destroySession();
 });
 
 browser.runtime.onMessage.addListener(

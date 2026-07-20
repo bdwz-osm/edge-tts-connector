@@ -27,7 +27,11 @@ function boot() {
   let lastRoot: Element | null = null;
   let lastCtxEl: Element | null = null;
   let lastDestroy: string[] = [];
+  /** Bumps on each collect so concurrent awaits don't clobber each other's last*. */
+  let collectSeq = 0;
   let toastTimer: number | null = null;
+  /** Open port while reading — keeps Firefox MV3 event page from dying mid-TTS. */
+  let playbackPort: browser.Runtime.Port | null = null;
 
   document.addEventListener(
     "contextmenu",
@@ -54,6 +58,9 @@ function boot() {
       case "content/clearHighlight":
         clearHighlight();
         return Promise.resolve({ ok: true });
+      case "content/holdPort":
+        setHoldPort(Boolean(msg.on));
+        return Promise.resolve({ ok: true });
       case "content/toast":
         showToast(
           (msg.level as string) ?? "info",
@@ -73,11 +80,37 @@ function boot() {
     }
   });
 
-  window.addEventListener("pagehide", () => {
+  window.addEventListener("pagehide", (e) => {
+    // bfcache: page may come back; don't treat as tab death / Stop.
+    if (e.persisted) return;
+    setHoldPort(false);
     safeSend({ type: "content/gone" });
   });
 
   safeSend({ type: "content/ready" });
+
+  function setHoldPort(on: boolean) {
+    if (on) {
+      if (playbackPort) return;
+      try {
+        if (!browser.runtime?.id) return;
+        playbackPort = browser.runtime.connect({ name: "etc-playback" });
+        playbackPort.onDisconnect.addListener(() => {
+          playbackPort = null;
+        });
+      } catch {
+        playbackPort = null;
+      }
+      return;
+    }
+    if (!playbackPort) return;
+    try {
+      playbackPort.disconnect();
+    } catch {
+      /* */
+    }
+    playbackPort = null;
+  }
 
   async function destroySelectors(): Promise<string[]> {
     try {
@@ -97,18 +130,26 @@ function boot() {
     mode: ChunkMode;
     empty: boolean;
     readabilityFailed: boolean;
+    root: Element | null;
+    destroy: string[];
   }> {
+    const seq = ++collectSeq;
     const destroy = await destroySelectors();
-    lastDestroy = destroy;
     const result = chunkPage(document, { destroySelectors: destroy });
-    lastRoot = result.root;
-    lastChunks = result.chunks;
-    lastMode = "page";
+    // Only the latest collect owns highlight state.
+    if (seq === collectSeq) {
+      lastDestroy = destroy;
+      lastRoot = result.root;
+      lastChunks = result.chunks;
+      lastMode = "page";
+    }
     return {
-      chunks: lastChunks,
-      mode: lastMode,
-      empty: lastChunks.length === 0,
+      chunks: result.chunks,
+      mode: "page",
+      empty: result.chunks.length === 0,
       readabilityFailed: result.readabilityFailed,
+      root: result.root,
+      destroy,
     };
   }
 
@@ -118,13 +159,16 @@ function boot() {
     empty: boolean;
     readabilityFailed: boolean;
   }> {
+    const seq = ++collectSeq;
     const destroy = await destroySelectors();
-    lastDestroy = destroy;
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !collapse(sel.toString())) {
-      lastChunks = [];
-      lastMode = "selection";
-      lastRoot = null;
+      if (seq === collectSeq) {
+        lastChunks = [];
+        lastMode = "selection";
+        lastRoot = null;
+        lastDestroy = destroy;
+      }
       return {
         chunks: [],
         mode: "selection",
@@ -132,13 +176,17 @@ function boot() {
         readabilityFailed: false,
       };
     }
-    lastChunks = chunkSelection(sel, { destroySelectors: destroy });
-    lastMode = "selection";
-    lastRoot = null;
+    const chunks = chunkSelection(sel, { destroySelectors: destroy });
+    if (seq === collectSeq) {
+      lastChunks = chunks;
+      lastMode = "selection";
+      lastRoot = null;
+      lastDestroy = destroy;
+    }
     return {
-      chunks: lastChunks,
+      chunks,
       mode: "selection",
-      empty: lastChunks.length === 0,
+      empty: chunks.length === 0,
       readabilityFailed: false,
     };
   }
@@ -149,14 +197,16 @@ function boot() {
     mode: ChunkMode;
     readabilityFailed: boolean;
   }> {
+    // Snapshot before any await — concurrent collects must not steal context.
+    const ctxEl = lastCtxEl;
     const data = await collectPageChunks();
     let chunkIndex = 0;
-    if (lastCtxEl && lastRoot) {
+    if (ctxEl && data.root) {
       chunkIndex = nearestChunkIndex(
-        lastRoot,
+        data.root,
         data.chunks,
-        lastCtxEl,
-        lastDestroy,
+        ctxEl,
+        data.destroy,
       );
     }
     return {

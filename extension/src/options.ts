@@ -23,6 +23,7 @@ const importModeBox = document.getElementById("importMode")!;
 const ruleImportGo = document.getElementById("ruleImportGo") as HTMLButtonElement;
 
 let pendingImportJson: string | null = null;
+let importReadGeneration = 0;
 
 function flash(text: string, kind: "ok" | "err" | "warn") {
   saveMsg.hidden = false;
@@ -269,11 +270,20 @@ ruleImport.addEventListener("click", () => {
 ruleImportFile.addEventListener("change", () => {
   const file = ruleImportFile.files?.[0];
   if (!file) return;
-  void file.text().then((text) => {
-    pendingImportJson = text;
-    importModeBox.classList.remove("hidden");
-    flash("Choose merge mode, then Apply import.", "warn");
-  });
+  const generation = ++importReadGeneration;
+  pendingImportJson = null;
+  void file
+    .text()
+    .then((text) => {
+      if (generation !== importReadGeneration) return;
+      pendingImportJson = text;
+      importModeBox.classList.remove("hidden");
+      flash("Choose merge mode, then Apply import.", "warn");
+    })
+    .catch((e) => {
+      if (generation !== importReadGeneration) return;
+      flash(e instanceof Error ? e.message : String(e), "err");
+    });
   ruleImportFile.value = "";
 });
 

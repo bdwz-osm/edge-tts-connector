@@ -1,5 +1,16 @@
 # DECISIONS
 
+## 2026-07-19 — Firefox playback freeze (no ended)
+
+- FF MV3 event page + bg `Audio` can pause/stall without `ended` → session stuck on N/M, silent.
+- Fix: while `ffExpectPlaying`, 1s watchdog resumes unexpected pause (×2) else treats as ended; ~4s zero `currentTime` progress → ended. `alarms` pulse ~25s while session playing/paused. Serialize `onAudioEnded` with advanceLock.
+
+## 2026-07-19 — Firefox spontaneous Stop (session wiped)
+
+- User report: equivalent to Stop — popup loses N/M entirely (not a stuck playing state). Keepalive off.
+- Cause: FF event page terminated → in-memory session + Audio gone. Alarms alone are weak; open ports keep the event page alive.
+- Fix: while session starting/playing/paused, content opens `runtime.connect({name:"etc-playback"})`; bg holds ports. `pagehide` with `event.persisted` (bfcache) no longer sends `content/gone`.
+
 ## 2026-07-19 — Lead-in title + author outside article root
 
 - Many CMS pages put `h1` + byline in a hero *above* `<article>`. Rooting on article skipped both.

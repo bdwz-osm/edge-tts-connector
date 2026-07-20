@@ -74,10 +74,26 @@ function notify() {
   for (const fn of listeners) fn();
 }
 
+type PulseHooks = {
+  arm?: () => void;
+  clear?: () => void;
+};
+let pulseHooks: PulseHooks = {};
+
+/** Background registers alarm keep-alive for Firefox event pages. */
+export function setSessionPulseHooks(h: PulseHooks): void {
+  pulseHooks = h;
+}
+
 function setStatus(s: SessionStatus, err?: string) {
   if (!session) return;
   session.status = s;
   if (err !== undefined) session.errorMessage = err;
+  if (s === "playing" || s === "paused" || s === "starting") {
+    pulseHooks.arm?.();
+  } else {
+    pulseHooks.clear?.();
+  }
   notify();
 }
 
@@ -128,6 +144,7 @@ function clearBuffer(s: Session) {
 export async function destroySession(): Promise<void> {
   const s = session;
   session = null;
+  pulseHooks.clear?.();
   if (!s) {
     notify();
     return;
@@ -203,7 +220,8 @@ export async function activate(tabId: number, opts?: {
   let chunks = opts?.chunks;
   let mode = opts?.mode ?? "page";
   let readabilityFailed = opts?.readabilityFailed ?? false;
-  if (!chunks?.length) {
+  // Only fetch when caller omitted chunks. [] is a real result (e.g. empty selection).
+  if (chunks === undefined) {
     const data = await requestChunks(
       tabId,
       mode === "selection" ? "selection" : "page",
@@ -291,16 +309,24 @@ export async function prevChunk(): Promise<void> {
   await playCurrent();
 }
 
+/** Serialize ended/stall advances (FF watchdog can race the real `ended` event). */
+let advanceLock = false;
+
 export async function onAudioEnded(): Promise<void> {
   const s = session;
-  if (!s || s.status !== "playing") return;
-  if (s.index >= s.chunks.length - 1) {
-    await destroySession();
-    return;
+  if (!s || s.status !== "playing" || advanceLock) return;
+  advanceLock = true;
+  try {
+    if (s.index >= s.chunks.length - 1) {
+      await destroySession();
+      return;
+    }
+    s.index++;
+    topUpBuffer();
+    await playCurrent();
+  } finally {
+    advanceLock = false;
   }
-  s.index++;
-  topUpBuffer();
-  await playCurrent();
 }
 
 export async function onAudioError(message: string): Promise<void> {

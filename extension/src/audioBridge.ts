@@ -19,6 +19,16 @@ let chromeOffscreenReady: Promise<void> | null = null;
 let endedHandler: (() => void) | null = null;
 let errorHandler: ((message: string) => void) | null = null;
 
+/**
+ * Firefox event-page + bg Audio can pause/stall without firing `ended`, which
+ * freezes the session on N/M. While we intend to be playing, watch and recover.
+ */
+let ffExpectPlaying = false;
+let ffWatchTimer: ReturnType<typeof setInterval> | null = null;
+let ffLastTime = -1;
+let ffStuckTicks = 0;
+let ffResumeAttempts = 0;
+
 export function setAudioLifecycleHandlers(handlers: {
   onEnded: () => void;
   onError: (message: string) => void;
@@ -27,15 +37,89 @@ export function setAudioLifecycleHandlers(handlers: {
   errorHandler = handlers.onError;
 }
 
+function ffClearWatch() {
+  if (ffWatchTimer) {
+    clearInterval(ffWatchTimer);
+    ffWatchTimer = null;
+  }
+  ffLastTime = -1;
+  ffStuckTicks = 0;
+  ffResumeAttempts = 0;
+}
+
+function ffNoteEnded() {
+  if (!ffExpectPlaying) return;
+  ffExpectPlaying = false;
+  ffClearWatch();
+  endedHandler?.();
+}
+
+/** Shared by 1s watch and alarm pulse — up to 2 resume tries, then give up. */
+function ffAttemptResume(onGiveUp: () => void) {
+  const a = ffAudio;
+  if (!a) return;
+  if (ffResumeAttempts < 2) {
+    ffResumeAttempts++;
+    void a.play().then(
+      () => {
+        ffStuckTicks = 0;
+      },
+      () => {
+        onGiveUp();
+      },
+    );
+  } else {
+    onGiveUp();
+  }
+}
+
+function ffArmWatch() {
+  if (isChrome) return;
+  ffClearWatch();
+  ffWatchTimer = setInterval(() => {
+    if (!ffExpectPlaying) return;
+    const a = ffAudio;
+    if (!a) return;
+
+    if (a.ended) {
+      ffNoteEnded();
+      return;
+    }
+
+    // Unexpected pause (event-page throttle, OS audio focus, etc.)
+    if (a.paused) {
+      ffAttemptResume(ffNoteEnded);
+      return;
+    }
+
+    ffResumeAttempts = 0;
+    const t = a.currentTime;
+    if (t > 0 && t === ffLastTime) {
+      ffStuckTicks++;
+      // ~4s with no progress while "playing"
+      if (ffStuckTicks >= 4) ffNoteEnded();
+    } else {
+      ffStuckTicks = 0;
+      ffLastTime = t;
+    }
+  }, 1000);
+}
+
 function getFfAudio(): HTMLAudioElement {
   if (!ffAudio) {
     ffAudio = new Audio();
     ffAudio.preload = "auto";
     ffAudio.addEventListener("ended", () => {
-      endedHandler?.();
+      ffNoteEnded();
     });
     ffAudio.addEventListener("error", () => {
+      ffExpectPlaying = false;
+      ffClearWatch();
       errorHandler?.(ffAudio?.error?.message ?? "audio error");
+    });
+    // pause without our audioPause path — recover in watch
+    ffAudio.addEventListener("pause", () => {
+      /* handled by ffArmWatch */
     });
   }
   return ffAudio;
@@ -125,13 +209,23 @@ export async function audioPlay(p: AudioPlayPayload): Promise<void> {
   }
   stopFfKeepalive();
   const a = getFfAudio();
+  ffExpectPlaying = false;
+  ffClearWatch();
   a.pause();
   revokeFfUrl();
   ffObjectUrl = URL.createObjectURL(p.blob);
   a.src = ffObjectUrl;
   a.volume = clamp01(p.volume);
   a.playbackRate = p.playbackSpeed;
-  await a.play();
+  ffExpectPlaying = true;
+  ffArmWatch();
+  try {
+    await a.play();
+  } catch (e) {
+    ffExpectPlaying = false;
+    ffClearWatch();
+    throw e;
+  }
 }
 
 export async function audioPause(): Promise<void> {
@@ -139,6 +233,8 @@ export async function audioPause(): Promise<void> {
     await sendToOffscreen({ type: "audio/pause" });
     return;
   }
+  ffExpectPlaying = false;
+  ffClearWatch();
   getFfAudio().pause();
 }
 
@@ -148,7 +244,15 @@ export async function audioResume(): Promise<void> {
     return;
   }
   stopFfKeepalive();
-  await getFfAudio().play();
+  ffExpectPlaying = true;
+  ffArmWatch();
+  try {
+    await getFfAudio().play();
+  } catch (e) {
+    ffExpectPlaying = false;
+    ffClearWatch();
+    throw e;
+  }
 }
 
 export async function audioStop(): Promise<void> {
@@ -156,12 +260,28 @@ export async function audioStop(): Promise<void> {
     await sendToOffscreen({ type: "audio/stop" });
     return;
   }
+  ffExpectPlaying = false;
+  ffClearWatch();
   stopFfKeepalive();
   const a = getFfAudio();
   a.pause();
   a.removeAttribute("src");
   a.load();
   revokeFfUrl();
+}
+
+/** Wake path for Firefox event-page alarms: re-check stall / unexpected pause. */
+export function audioPlaybackPulse(): void {
+  if (isChrome || !ffExpectPlaying || !ffAudio) return;
+  if (!ffWatchTimer) ffArmWatch();
+  const a = ffAudio;
+  if (a.ended) {
+    ffNoteEnded();
+    return;
+  }
+  if (a.paused) {
+    ffAttemptResume(ffNoteEnded);
+  }
 }
 
 export async function audioSetGain(opts: {

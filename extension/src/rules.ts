@@ -124,10 +124,33 @@ function draftApplies(
   return true;
 }
 
+function restoreDraftIfApplicable(
+  draft: RuleDraft | undefined,
+  targetRuleId: string | null,
+): void {
+  if (!draftApplies(draft, targetRuleId)) return;
+  fillForm({
+    hostsText: draft.hostsText,
+    pathPrefix: draft.pathPrefix,
+    selectorsText: draft.selectorsText,
+    note: draft.note,
+    enabled: draft.enabled,
+  });
+  flash("Restored unsaved draft.", "warn");
+}
+
 async function load() {
-  const store = await send<RulesStore>({ type: "rules/getStore" });
-  const draftGot = await browser.storage.local.get(RULES_DRAFT_KEY);
-  const draft = draftGot[RULES_DRAFT_KEY] as RuleDraft | undefined;
+  let store: RulesStore;
+  let draft: RuleDraft | undefined;
+  try {
+    store = await send<RulesStore>({ type: "rules/getStore" });
+    const draftGot = await browser.storage.local.get(RULES_DRAFT_KEY);
+    draft = draftGot[RULES_DRAFT_KEY] as RuleDraft | undefined;
+  } catch (e) {
+    flash(e instanceof Error ? e.message : String(e), "err");
+    bind();
+    return;
+  }
 
   // Prefer URL context (captured before this tab became active).
   if (wantTab && !ruleId) {
@@ -143,16 +166,7 @@ async function load() {
       };
       fillForm(tabPrefill);
       baseline = null;
-      if (draftApplies(draft, null)) {
-        fillForm({
-          hostsText: draft.hostsText,
-          pathPrefix: draft.pathPrefix,
-          selectorsText: draft.selectorsText,
-          note: draft.note,
-          enabled: draft.enabled,
-        });
-        flash("Restored unsaved draft.", "warn");
-      }
+      restoreDraftIfApplicable(draft, null);
       bind();
       return;
     }
@@ -177,21 +191,12 @@ async function load() {
         };
         fillForm(tabPrefill);
         baseline = null;
-        if (draftApplies(draft, null)) {
-          fillForm({
-            hostsText: draft.hostsText,
-            pathPrefix: draft.pathPrefix,
-            selectorsText: draft.selectorsText,
-            note: draft.note,
-            enabled: draft.enabled,
-          });
-          flash("Restored unsaved draft.", "warn");
-        }
+        restoreDraftIfApplicable(draft, null);
         bind();
         return;
       }
-    } catch {
-      /* */
+    } catch (e) {
+      console.error("rules/tabContext failed", e);
     }
   }
 
@@ -201,16 +206,7 @@ async function load() {
       baseline = { ...found };
       titleEl.textContent = found.hosts[0] ?? "Site rule";
       fillForm(found);
-      if (draftApplies(draft, ruleId)) {
-        fillForm({
-          hostsText: draft.hostsText,
-          pathPrefix: draft.pathPrefix,
-          selectorsText: draft.selectorsText,
-          note: draft.note,
-          enabled: draft.enabled,
-        });
-        flash("Restored unsaved draft.", "warn");
-      }
+      restoreDraftIfApplicable(draft, ruleId);
     } else {
       flash("Rule not found.", "err");
       ruleId = null;
@@ -223,6 +219,7 @@ async function load() {
         enabled: true,
       };
       fillForm(tabPrefill);
+      restoreDraftIfApplicable(draft, null);
     }
   } else {
     titleEl.textContent = "New site rule";
@@ -235,15 +232,7 @@ async function load() {
       enabled: true,
     };
     fillForm(tabPrefill);
-    if (draftApplies(draft, null)) {
-      fillForm({
-        hostsText: draft.hostsText,
-        pathPrefix: draft.pathPrefix,
-        selectorsText: draft.selectorsText,
-        note: draft.note,
-        enabled: draft.enabled,
-      });
-    }
+    restoreDraftIfApplicable(draft, null);
   }
   bind();
 }

@@ -283,10 +283,11 @@ function resolveReadabilityRoot(
 
     const bodyLen = textLen(body);
     const rootLen = textLen(root);
-    // Too small vs body/article, or still a leaf → flat-page pickRoot (usually body).
+    // Too small vs body/article, leaf, or itself excluded/destroy → pickRoot.
     if (
       root === body ||
       isLeafBlock(root) ||
+      isExcluded(root, destroy) ||
       rootLen < 200 ||
       (bodyLen > 0 && rootLen < bodyLen * 0.35) ||
       rootLen < articleLen * 0.5

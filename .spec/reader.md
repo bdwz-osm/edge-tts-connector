@@ -30,9 +30,11 @@ EXCLUDE  = nav, aside, footer, header, script, style, noscript, iframe, svg,
 
 
 ```
-function pickRoot(doc):
+function pickRoot(doc, destroy):
   for sel in [article, [role=main], main]:
-    if el = doc.querySelector(sel) and textLen(el) > 200: return el
+    el = doc.querySelector(sel)
+    // EXCLUDE + destroy on the candidate itself (not only descendants)
+    if el and textLen(el) > 200 and not excluded/destroy(el): return el
   // Baseline score = body. Candidate must beat body (else flat pages pick
   // a .sourceCode/<pre> wrapper — high text, zero links — and skip the top).
   best = body; bestScore = textLen(body) - 2*linkTextLen(body)
@@ -46,6 +48,7 @@ function visibleText(el):
   // skip EXCLUDE, destroy selectors, display:none / visibility:hidden; collapse WS
 
 function splitSoft(text):  // ladder
+  if !text after collapse: return []
   if len <= SOFT_MAX: return [text]
   // 1) strong sentence: (?<=[.!?…])\s+ | CJK 。！？； | ;\s+
   // 2) weak clause if still over: :\s | —\s | –\s | ,\s
@@ -61,10 +64,13 @@ function chunkPage(doc):
   i = 0
   for each leaf BLOCK_SEL under root:
     if excluded/destroy or not under root: continue
-    for part in splitSoft(visibleText(el)):
+    text = visibleText(el)
+    if not text: continue
+    for part in splitSoft(text):
       chunks.push({ i, text: part, anchor: childIndexPath(root, el) })
       i++
-  if empty: fallback splitSoft(visibleText(root)) anchor []
+  if empty and visibleText(root):
+    fallback splitSoft(visibleText(root)) anchor []
 ```
 
 `childIndexPath(root, el)`: indices among **element children only**. Highlight: walk path; fail → skip highlight that tick.
