@@ -35,6 +35,7 @@ await esbuild.build({
     background: join(src, "background.ts"),
     popup: join(src, "popup.ts"),
     options: join(src, "options.ts"),
+    rules: join(src, "rules.ts"),
     ...(target === "chrome"
       ? { offscreen: join(src, "offscreen.ts") }
       : {}),
@@ -56,7 +57,7 @@ const manifestSrc =
     : join(__dirname, "manifest.chrome.json");
 copyFileSync(manifestSrc, join(dist, "manifest.json"));
 
-for (const name of ["popup.html", "options.html"]) {
+for (const name of ["popup.html", "options.html", "rules.html"]) {
   copyFileSync(join(src, name), join(dist, name));
 }
 if (target === "chrome") {
@@ -70,7 +71,7 @@ if (existsSync(stylesSrc)) {
   cpSync(stylesSrc, stylesDist, { recursive: true });
 }
 
-for (const name of ["popup.css", "options.css"]) {
+for (const name of ["popup.css", "options.css", "rules.css"]) {
   const p = join(src, name);
   if (existsSync(p)) copyFileSync(p, join(dist, name));
 }

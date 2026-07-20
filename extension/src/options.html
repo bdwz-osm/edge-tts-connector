@@ -50,6 +50,28 @@
       </section>
 
       <section class="card">
+        <h2>Site rules</h2>
+        <p class="muted">
+          Per-site CSS selectors excluded from TTS (before Readability and at
+          text extract). Wikipedia footnotes ship as a default rule.
+        </p>
+        <div class="btn-row">
+          <button type="button" id="ruleNew">New rule</button>
+          <button type="button" id="ruleImport" class="secondary">Import…</button>
+          <button type="button" id="ruleExport" class="secondary">Export</button>
+        </div>
+        <input id="ruleImportFile" type="file" accept="application/json,.json" hidden />
+        <div id="importMode" class="import-mode hidden">
+          <span class="muted">On conflict:</span>
+          <label><input type="radio" name="importMode" value="merge_union" checked /> Union selectors</label>
+          <label><input type="radio" name="importMode" value="merge_replace_key" /> Replace matching site</label>
+          <label><input type="radio" name="importMode" value="replace_all" /> Replace all rules</label>
+          <button type="button" id="ruleImportGo" class="secondary">Apply import</button>
+        </div>
+        <ul id="rulesList" class="rules-list"></ul>
+      </section>
+
+      <section class="card">
         <h2>Keyboard shortcuts</h2>
         <p class="muted">
           Commands are registered; enable and bind them in the browser’s extension

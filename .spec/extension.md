@@ -7,88 +7,64 @@ Parent: [`../project.md`](../project.md). Wire: [`rpc.md`](rpc.md). Reader: [`re
 ```
 extension/
   package.json
-  esbuild.config.mjs          # or scripts in package.json
-  manifest.chrome.json        # MV3 service_worker + offscreen perm
-  manifest.firefox.json       # MV3 event page scripts + gecko id
+  esbuild.config.mjs
+  manifest.chrome.json / manifest.firefox.json
   src/
     background.ts
-    offscreen.ts / offscreen.html
-    audioBridge.ts            # thin; or logic split chrome/ff
-    content.ts
-    chunk.ts
-    rpc.ts                    # daemon fetch helpers (bg only)
-    popup.ts html css
-    options.ts html css
+    offscreen.ts / offscreen.html   # Chrome
+    audioBridge.ts
+    content.ts                      # always-on http(s) + on-demand inject
+    chunk.ts  splitText.ts
+    siteRules.ts
+    rpc.ts
+    popup / options / rules  (.ts .html .css)
     styles/highlight.css
 ```
 
-Repo-root outputs (not under `extension/`):
-
-```
-build/
-  chrome/                   # Load unpacked (Chromium)
-  firefox/                  # Temporary add-on (Firefox)
-```
+Outputs: `build/chrome/`, `build/firefox/`.
 
 ## Build
 
 ```bash
-./rebuild_extensions.sh     # preferred: npm i + both targets + load instructions
-# or:
-cd extension && npm i
-npm run build:chrome        # → ../build/chrome/
-npm run build:firefox       # → ../build/firefox/
-npm run build               # both
+./rebuild_extensions.sh
+cd extension && npm run build && npm test
 ```
 
-**esbuild entries:** `background`, `content`, `popup`, `options`, `offscreen` (chrome). Bundle `webextension-polyfill` into bg/popup/options/content as needed.
+**esbuild entries:** `background`, `content` (IIFE), `popup`, `options`, `rules`, `offscreen` (chrome). Deps: `webextension-polyfill`, `@mozilla/readability`.
 
-Load unpacked: Chrome/Vivaldi → `build/chrome/`; Firefox → `build/firefox/` (see `./rebuild_extensions.sh` output).
-
-No remote code. TS target ES2022. Keep deps minimal (polyfill + esbuild).
-
-## Manifest essentials (both)
+## Manifest
 
 ```json
 {
   "manifest_version": 3,
   "name": "etc Speech",
-  "version": "0.1.0",
   "permissions": ["storage", "activeTab", "scripting", "contextMenus", "tabs"],
   "host_permissions": ["http://127.0.0.1:24765/*"],
-  "action": { "default_popup": "popup.html", "default_title": "etc Speech" },
-  "options_ui": { "page": "options.html", "open_in_tab": true },
-  "commands": {
-    "toggle-pause": { "description": "Play/pause" },
-    "next-chunk": { "description": "Next chunk" },
-    "prev-chunk": { "description": "Previous chunk" }
-  }
+  "content_scripts": [{
+    "matches": ["http://*/*", "https://*/*"],
+    "js": ["content.js"],
+    "css": ["styles/highlight.css"],
+    "run_at": "document_idle",
+    "all_frames": false
+  }],
+  "action": { "default_popup": "popup.html" },
+  "options_ui": { "page": "options.html", "open_in_tab": true }
 }
 ```
 
-**Chrome add:** `"permissions": […, "offscreen"]`, `"background": { "service_worker": "background.js", "type": "module" }`. Keep port in `host_permissions` (Chrome supports it).
+**Chrome:** + `offscreen`; SW background; port in host_permissions.  
+**Firefox:** host `http://127.0.0.1/*` (no port in patterns); event page scripts; gecko id.
 
-**Firefox add:**
-```json
-"host_permissions": ["http://127.0.0.1/*"],
-"background": { "scripts": ["background.js"], "type": "module" },
-"browser_specific_settings": {
-  "gecko": { "id": "edge-tts-connector@local", "strict_min_version": "121.0" }
-}
-```
+Always-on content script records `contextmenu` target (RFH) and answers chunk messages. `injectContent` still used as fallback (ping / executeScript).
 
-Firefox **ignores ports in match patterns** ([MDN](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Match_patterns), bugs 1362809 / 1468162). Use host-only `http://127.0.0.1/*`; daemon still binds `:24765`. Broader than one port, still loopback-only + secret.
+**Refuse activate** on privileged/PDF URLs (`urls.ts`).
 
-No default `content_scripts`. Inject on user activate:
+### Context menus
 
-```js
-await browser.scripting.insertCSS({ target: { tabId }, files: ["styles/highlight.css"] })
-await browser.scripting.executeScript({ target: { tabId }, files: ["content.js"] })
-```
-
-**Refuse activate** if URL matches: `chrome:`, `chrome-extension:`, `about:`, `edge:`, `devtools:`, Web Store, or obvious built-in PDF viewer schemes—show popup/page error.
-
-Context menu (onInstalled): `etc Speech: Read From Here` contexts `["page","selection"]`.
+| id | title | contexts |
+|----|-------|----------|
+| `edge-tts-read-from-here` | etc Speech: Read from here | `page` only |
+| `edge-tts-read-selection` | etc Speech: Read selection | `selection` only |
 
 ## Settings (`storage.local`)
 
@@ -105,27 +81,64 @@ Context menu (onInstalled): `etc Speech: Read From Here` contexts `["page","sele
 | bufferAhead | `8` |
 | bufferBehind | `1` |
 | audioKeepalive | `false` |
+| **siteRules** | seeded store (see below) |
+| **siteRuleDraft** | editor draft (ephemeral) |
 
-Pitch always `+0Hz` on wire v1 (not stored).
+Pitch `+0Hz` on wire v1 (not stored).
+
+### Live gain
+
+- Drag: `popup/liveGain` → in-memory cache + `audioSetGain` (no storage write per tick).
+- Release: `popup/setSettings` persists.
+- `audioPlay` uses gain cache so chunk boundaries keep knob values.
+
+## Site rules
+
+**Store** (`siteRules`):
+
+```ts
+{
+  version: 1,
+  seedVersion: number,  // bump to inject new defaults once
+  rules: SiteRule[]
+}
+
+SiteRule = {
+  id, hosts: string[], pathPrefix: string,
+  selectors: string[], enabled: boolean,
+  note?, seedId?
+}
+```
+
+**Host match:** exact hostname, or `*.example.com` → apex + any subdomain.  
+**New rule from tab:** exact host + www/non-www twin.  
+**Path:** empty = all paths; else pathname prefix.  
+**Most specific:** longest matching `pathPrefix` among host hits; selectors **union** across all matches.
+
+**Apply:** strip matching nodes on Readability **clone**; skip in live `visibleText` / block walk (do not mutate the real page).
+
+**Default seed (seedVersion 1):** Wikipedia footnotes / edit sections — `*.wikipedia.org`, selectors `sup.reference`, `sup[id^='cite_ref']`, `.mw-editsection`, `span.mw-cite-backlink`.
+
+**Import modes:** `replace_all` | `merge_union` | `merge_replace_key` (key = sorted hosts + pathPrefix).
+
+**UI:** Options list + Import/Export; focused `rules.html` editor (draft autosave); popup “Site rules for this tab…”.
 
 ## AudioBridge
 
 | | Chrome | Firefox |
 |--|--------|---------|
-| Where | `offscreen.html` + `offscreen.ts` | same bg page as SW substitute (`Audio` in event page) |
-| Create | `offscreen.createDocument({ url, reasons:["AUDIO_PLAYBACK","BLOBS"], justification:"TTS playback" })` singleflight | N/A |
-| Idle | doc may die ~30s after silence → recreate on next play | may suspend when idle → play wakes |
-| Keepalive off | recreate on resume | cold resume |
-| Keepalive on | while `paused`, single silent loop (`<audio loop>` tiny silent asset **or** WebAudio gain~0 oscillator); stop on play/stop/session end/setting off | optional no-op |
+| Where | offscreen doc | background `Audio` |
+| ended/error | sendMessage → SW | **direct handlers** (sendMessage does not re-enter same frame) |
 
-Never stack keepalives. `ended`/`error` → message background (SW may be asleep—offscreen must sendMessage).
+**Keepalive** (`audioKeepalive` setting, default off): while session is **paused**, play a single silent looped `<audio>` (tiny data-URI WAV) so the browser is less likely to suspend the offscreen doc / Firefox background audio. Stop keepalive on play, stop, session end, or setting off. Never stack multiple keepalive elements.
 
 ## UI (dark)
 
-- **Options:** secret paste, test connection, open shortcuts help link text.
-- **Popup:** online/secret status; play/pause; ±chunk; lang; voice; gen speed select (−50…+100 /10); playback speed range 0.5–2.0 step 0.05; volume; keepalive checkbox; clear cache; link options.
-- **Toasts:** content only for current play-chunk failures / refuse / empty (see reader).
+- **Options:** secret, probe, site rules list, shortcuts help.
+- **Rules editor:** hosts, path prefix, selectors, note, enable; draft-safe.
+- **Popup:** transport, lang/voice/speeds/volume, keepalive, site rules, options.
+- **Toasts:** readability fallback; play-chunk failures; empty selection/page.
 
 ## Sole RPC client
 
-Background (and offscreen only for blob fetch if simpler—prefer **background fetches**, pass blobUrl to offscreen). Content never `fetch` daemon.
+Background only for daemon HTTP. Content never `fetch` daemon.

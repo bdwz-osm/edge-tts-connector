@@ -22,6 +22,7 @@ const volumeOut = document.getElementById("volumeOut")!;
 const keepaliveEl = document.getElementById("keepalive") as HTMLInputElement;
 const clearBtn = document.getElementById("clearCache") as HTMLButtonElement;
 const optionsBtn = document.getElementById("options") as HTMLButtonElement;
+const siteRulesBtn = document.getElementById("siteRules") as HTMLButtonElement;
 
 let voices: VoiceDto[] = [];
 let settings: Settings | null = null;
@@ -255,6 +256,12 @@ nextBtn.addEventListener("click", () => {
 
 optionsBtn.addEventListener("click", () => {
   void send({ type: "popup/openOptions" }).catch((e) => {
+    showBanner(e instanceof Error ? e.message : String(e));
+  });
+});
+
+siteRulesBtn.addEventListener("click", () => {
+  void send({ type: "popup/openRulesEditor", forActiveTab: true }).catch((e) => {
     showBanner(e instanceof Error ? e.message : String(e));
   });
 });

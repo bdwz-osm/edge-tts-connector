@@ -3,11 +3,11 @@ import {
   chunkPage,
   chunkSelection,
   nearestChunkIndex,
-  pickRoot,
   resolveAnchor,
   type Chunk,
   type ChunkMode,
 } from "./chunk";
+import { getRulesStore, selectorsForPage } from "./siteRules";
 
 declare global {
   interface Window {
@@ -26,6 +26,7 @@ function boot() {
   let lastMode: ChunkMode = "page";
   let lastRoot: Element | null = null;
   let lastCtxEl: Element | null = null;
+  let lastDestroy: string[] = [];
   let toastTimer: number | null = null;
 
   document.addEventListener(
@@ -43,7 +44,10 @@ function boot() {
       case "content/ping":
         return Promise.resolve({ ok: true });
       case "content/requestChunks":
-        return Promise.resolve(collectChunks());
+        // Page only — selection is a separate verb.
+        return collectPageChunks();
+      case "content/requestSelectionChunks":
+        return collectSelectionChunks();
       case "content/highlight":
         highlight(msg.chunkIndex as number);
         return Promise.resolve({ ok: true });
@@ -57,7 +61,13 @@ function boot() {
         );
         return Promise.resolve({ ok: true });
       case "content/resolveReadFromHere":
-        return Promise.resolve(resolveReadFromHere());
+        return resolveReadFromHere();
+      case "content/pageInfo":
+        return Promise.resolve({
+          host: location.hostname,
+          pathname: location.pathname,
+          href: location.href,
+        });
       default:
         return undefined;
     }
@@ -69,35 +79,92 @@ function boot() {
 
   safeSend({ type: "content/ready" });
 
-  function collectChunks(): {
+  async function destroySelectors(): Promise<string[]> {
+    try {
+      const store = await getRulesStore();
+      return selectorsForPage(
+        store.rules,
+        location.hostname,
+        location.pathname,
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  async function collectPageChunks(): Promise<{
     chunks: Chunk[];
     mode: ChunkMode;
     empty: boolean;
-  } {
-    const sel = window.getSelection();
-    if (sel && !sel.isCollapsed && collapse(sel.toString())) {
-      lastRoot = pickRoot(document);
-      lastChunks = chunkSelection(sel);
-      lastMode = "selection";
-    } else {
-      lastRoot = pickRoot(document);
-      lastChunks = chunkPage(document);
-      lastMode = "page";
-    }
+    readabilityFailed: boolean;
+  }> {
+    const destroy = await destroySelectors();
+    lastDestroy = destroy;
+    const result = chunkPage(document, { destroySelectors: destroy });
+    lastRoot = result.root;
+    lastChunks = result.chunks;
+    lastMode = "page";
     return {
       chunks: lastChunks,
       mode: lastMode,
       empty: lastChunks.length === 0,
+      readabilityFailed: result.readabilityFailed,
     };
   }
 
-  function resolveReadFromHere(): { chunkIndex: number; chunks: Chunk[]; mode: ChunkMode } {
-    const data = collectChunks();
-    let chunkIndex = 0;
-    if (lastCtxEl && lastRoot && data.mode === "page") {
-      chunkIndex = nearestChunkIndex(lastRoot, data.chunks, lastCtxEl);
+  async function collectSelectionChunks(): Promise<{
+    chunks: Chunk[];
+    mode: ChunkMode;
+    empty: boolean;
+    readabilityFailed: boolean;
+  }> {
+    const destroy = await destroySelectors();
+    lastDestroy = destroy;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !collapse(sel.toString())) {
+      lastChunks = [];
+      lastMode = "selection";
+      lastRoot = null;
+      return {
+        chunks: [],
+        mode: "selection",
+        empty: true,
+        readabilityFailed: false,
+      };
     }
-    return { chunkIndex, chunks: data.chunks, mode: data.mode };
+    lastChunks = chunkSelection(sel, { destroySelectors: destroy });
+    lastMode = "selection";
+    lastRoot = null;
+    return {
+      chunks: lastChunks,
+      mode: "selection",
+      empty: lastChunks.length === 0,
+      readabilityFailed: false,
+    };
+  }
+
+  async function resolveReadFromHere(): Promise<{
+    chunkIndex: number;
+    chunks: Chunk[];
+    mode: ChunkMode;
+    readabilityFailed: boolean;
+  }> {
+    const data = await collectPageChunks();
+    let chunkIndex = 0;
+    if (lastCtxEl && lastRoot) {
+      chunkIndex = nearestChunkIndex(
+        lastRoot,
+        data.chunks,
+        lastCtxEl,
+        lastDestroy,
+      );
+    }
+    return {
+      chunkIndex,
+      chunks: data.chunks,
+      mode: "page",
+      readabilityFailed: data.readabilityFailed,
+    };
   }
 
   function clearHighlight() {
@@ -163,12 +230,6 @@ function collapse(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
-/**
- * Fire-and-forget to background. After extension reload the old content
- * script's extension binding is dead — polyfill sendMessage can still throw
- * "Extension context invalidated" as an uncaught error. Use chrome's callback
- * API and swallow lastError.
- */
 function safeSend(msg: Record<string, unknown>): void {
   try {
     const chromeRt = (
@@ -194,7 +255,6 @@ function safeSend(msg: Record<string, unknown>): void {
       return;
     }
 
-    // Firefox: browser.runtime
     if (!browser.runtime?.id) return;
     void Promise.resolve(browser.runtime.sendMessage(msg)).then(
       () => undefined,

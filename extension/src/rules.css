@@ -1,0 +1,159 @@
+:root {
+  color-scheme: dark;
+  --bg: #12131a;
+  --card: #1a1b24;
+  --input: #22232a;
+  --text: #e8e8ed;
+  --muted: #9a9aab;
+  --accent: #6c9eff;
+  --border: #2c2d38;
+  --ok: #6dca8e;
+  --err: #e86a6a;
+  --warn: #d4a84b;
+  font-family: system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+}
+
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+
+.top {
+  margin-bottom: 16px;
+}
+
+.top a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+h1 {
+  font-size: 1.35rem;
+  font-weight: 650;
+  margin: 8px 0 0;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.field span {
+  color: var(--muted);
+}
+
+input[type="text"],
+textarea {
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font: inherit;
+  font-family: ui-monospace, monospace;
+  font-size: 12.5px;
+}
+
+input:focus,
+textarea:focus {
+  outline: 1px solid var(--accent);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+
+button {
+  background: var(--accent);
+  color: #0c0d12;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: var(--input);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.msg {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.msg.ok {
+  background: rgba(109, 202, 142, 0.15);
+  color: var(--ok);
+}
+
+.msg.err {
+  background: rgba(232, 106, 106, 0.15);
+  color: var(--err);
+}
+
+.msg.warn {
+  background: rgba(212, 168, 75, 0.15);
+  color: var(--warn);
+}
+
+code {
+  font-size: 0.9em;
+}

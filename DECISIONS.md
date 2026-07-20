@@ -1,5 +1,30 @@
 # DECISIONS
 
+## 2026-07-19 — Lead-in title + author outside article root
+
+- Many CMS pages put `h1` + byline in a hero *above* `<article>`. Rooting on article skipped both.
+- Fix (generic): after root resolve, prepend lead-ins from nearby live `h1` / byline-ish nodes (sibling walk + schema.org/`rel=author`/`/author/` hrefs), else Readability `title`/`byline`, else cleaned `document.title`. Author spoken as `by …`. Dedupe vs body. No site-specific class lists.
+
+## 2026-07-19 — Readability root must not be a single paragraph
+
+- Flat pages (Beej pandoc: `body > h1|h2|p…`) have no article/main. Stamp “best score” climb stopped before `body` and crowned the longest `<p>` → one chunk only.
+- Fix: LCA of all stamped live nodes; reject leaf `BLOCK_SEL`; require ~35% of body / 50% of article text; else `pickRoot` (body).
+
+## 2026-07-19 — Site rules “for this tab” prefill
+
+- Opening `rules.html` made it the active tab; `rules/tabContext` then saw the editor, not the page → empty hosts.
+- Fix: resolve tab host/path/hosts **before** `tabs.create`; pass as query params; editor prefers URL over live activeTab.
+
+## 2026-07-19 — Reader quality: split, menus, site rules, Readability
+
+- **splitSoft ladder:** sentence → clause (`:`, `—`, `,`) → whitespace wrap @500 → HARD_MAX 2000 (prefer space). No paren/quote as primary breaks.
+- **Menus:** `Read from here` (`page` only) vs `Read selection` (`selection` only). Popup Play always page mode (never selection hijack).
+- **RFH target:** manifest `content_scripts` on http(s) records `contextmenu` target (inject-after-click loses the event).
+- **Site rules:** `storage.local` `{version, seedVersion, rules[]}`; hosts[] + optional `*.domain` + pathPrefix; destroy on Readability clone + skip in live `visibleText`. Import: replace_all / merge_union / merge_replace_key. Draft key for editor. Wikipedia footnotes seeded at seedVersion 1 (not a checkbox).
+- **Readability:** `@mozilla/readability` on stamped clone; map back to live root for highlight; fail → toast + `pickRoot`.
+- **Gain cache:** live drag updates memory + Audio; `audioPlay` uses cache so next chunk keeps knob values; storage on release only.
+- **UI:** `rules.html` focused editor; Options list; popup “Site rules for this tab…”.
+
 ## 2026-07-19 — Firefox audio/ended must not use runtime.sendMessage
 
 - FF playback is an `Audio` in the background frame (`audioBridge.ts`). `runtime.sendMessage({ type: "audio/ended" })` does not deliver to the same frame, so auto-advance never ran (manual Next worked).

@@ -213,3 +213,79 @@ ul.muted {
   margin: 0;
   padding-left: 1.2em;
 }
+
+.rules-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rules-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.rules-list li.disabled {
+  opacity: 0.55;
+}
+
+.rules-list .meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.rules-list .host {
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.rules-list .sub {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.rules-list .row-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.rules-list button.linkish {
+  background: transparent;
+  color: var(--btn-hover);
+  border: none;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.import-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.import-mode.hidden {
+  display: none;
+}
+
+.import-mode label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

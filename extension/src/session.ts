@@ -142,10 +142,24 @@ export async function destroySession(): Promise<void> {
 
 async function requestChunks(
   tabId: number,
-): Promise<{ chunks: Chunk[]; mode: ChunkMode; empty: boolean }> {
+  kind: "page" | "selection" = "page",
+): Promise<{
+  chunks: Chunk[];
+  mode: ChunkMode;
+  empty: boolean;
+  readabilityFailed?: boolean;
+}> {
   const res = (await browser.tabs.sendMessage(tabId, {
-    type: "content/requestChunks",
-  })) as { chunks: Chunk[]; mode: ChunkMode; empty: boolean };
+    type:
+      kind === "selection"
+        ? "content/requestSelectionChunks"
+        : "content/requestChunks",
+  })) as {
+    chunks: Chunk[];
+    mode: ChunkMode;
+    empty: boolean;
+    readabilityFailed?: boolean;
+  };
   return res;
 }
 
@@ -153,6 +167,7 @@ export async function activate(tabId: number, opts?: {
   startIndex?: number;
   chunks?: Chunk[];
   mode?: ChunkMode;
+  readabilityFailed?: boolean;
 }): Promise<void> {
   await destroySession();
 
@@ -187,15 +202,34 @@ export async function activate(tabId: number, opts?: {
 
   let chunks = opts?.chunks;
   let mode = opts?.mode ?? "page";
+  let readabilityFailed = opts?.readabilityFailed ?? false;
   if (!chunks?.length) {
-    const data = await requestChunks(tabId);
+    const data = await requestChunks(
+      tabId,
+      mode === "selection" ? "selection" : "page",
+    );
     chunks = data.chunks;
     mode = data.mode;
+    readabilityFailed = Boolean(data.readabilityFailed);
   }
   if (!chunks.length) {
     setStatus("error", "No readable text");
-    await toast(tabId, "error", "No readable text on this page");
+    await toast(
+      tabId,
+      "error",
+      mode === "selection"
+        ? "No text in selection"
+        : "No readable text on this page",
+    );
     throw new Error("No readable text");
+  }
+
+  if (readabilityFailed && mode === "page") {
+    await toast(
+      tabId,
+      "warn",
+      "Cleaned view failed; using basic extract",
+    );
   }
 
   session.chunks = chunks;

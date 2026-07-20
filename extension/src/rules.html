@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>etc Speech — Site rule</title>
+    <link rel="stylesheet" href="rules.css" />
+  </head>
+  <body>
+    <main>
+      <header class="top">
+        <a href="options.html" id="back">← All rules</a>
+        <h1 id="title">Site rule</h1>
+      </header>
+
+      <p id="msg" class="msg" hidden></p>
+
+      <section class="card">
+        <label class="field">
+          <span>Hosts (one per line; <code>*.example.com</code> = apex + subdomains)</span>
+          <textarea
+            id="hosts"
+            rows="3"
+            spellcheck="false"
+            placeholder="en.wikipedia.org&#10;www.wikipedia.org"
+          ></textarea>
+        </label>
+        <label class="field">
+          <span>Path prefix (optional)</span>
+          <input
+            id="pathPrefix"
+            type="text"
+            spellcheck="false"
+            placeholder="/wiki/"
+          />
+        </label>
+        <label class="field">
+          <span>Selectors to exclude from TTS (one CSS selector per line; # comments ok)</span>
+          <textarea
+            id="selectors"
+            rows="10"
+            spellcheck="false"
+            placeholder="sup.reference&#10;.mw-editsection"
+          ></textarea>
+        </label>
+        <label class="field">
+          <span>Note (optional)</span>
+          <input id="note" type="text" placeholder="footnotes" />
+        </label>
+        <label class="check">
+          <input id="enabled" type="checkbox" checked />
+          Enabled
+        </label>
+      </section>
+
+      <footer class="actions">
+        <span id="draftHint" class="muted">Draft autosaved</span>
+        <div class="btn-row">
+          <button type="button" id="revert" class="secondary">Revert</button>
+          <button type="button" id="save">Save</button>
+        </div>
+      </footer>
+    </main>
+    <script type="module" src="rules.js"></script>
+  </body>
+</html>

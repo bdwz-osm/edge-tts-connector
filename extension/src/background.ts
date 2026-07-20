@@ -31,6 +31,19 @@ import {
   markContentReady,
   clearContentReady,
 } from "./contentReady";
+import {
+  getRulesStore,
+  setRulesStore,
+  upsertRule,
+  deleteRule,
+  exportRulesJson,
+  parseImportJson,
+  mergeImported,
+  type ImportMode,
+  type SiteRule,
+  defaultHostsForTab,
+  findBestRuleForPage,
+} from "./siteRules";
 
 declare const __BROWSER__: "chrome" | "firefox";
 
@@ -45,22 +58,47 @@ setAudioLifecycleHandlers({
 });
 
 const MENU_READ_FROM_HERE = "edge-tts-read-from-here";
+const MENU_READ_SELECTION = "edge-tts-read-selection";
 
 type Msg = { type: string; [k: string]: unknown };
 
-browser.runtime.onInstalled.addListener(() => {
+function installMenus() {
   void browser.contextMenus.removeAll().then(() => {
     browser.contextMenus.create({
       id: MENU_READ_FROM_HERE,
-      title: "etc Speech: Read From Here",
-      contexts: ["page", "selection"],
+      title: "etc Speech: Read from here",
+      contexts: ["page"],
+    });
+    browser.contextMenus.create({
+      id: MENU_READ_SELECTION,
+      title: "etc Speech: Read selection",
+      contexts: ["selection"],
     });
   });
+}
+
+browser.runtime.onInstalled.addListener(() => {
+  installMenus();
+  void getRulesStore(); // seed Wikipedia defaults
 });
 
+// Event pages / SW restart: menus may already exist; ensure seed.
+void getRulesStore();
+try {
+  installMenus();
+} catch {
+  /* */
+}
+
 browser.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId !== MENU_READ_FROM_HERE || tab?.id == null) return;
-  void readFromHere(tab.id, tab.url);
+  if (tab?.id == null) return;
+  if (info.menuItemId === MENU_READ_FROM_HERE) {
+    void readFromHere(tab.id, tab.url);
+    return;
+  }
+  if (info.menuItemId === MENU_READ_SELECTION) {
+    void readSelection(tab.id, tab.url);
+  }
 });
 
 browser.tabs.onRemoved.addListener((tabId) => {
@@ -130,7 +168,6 @@ async function handleMessage(
       return next;
     }
     case "popup/liveGain": {
-      // Drag path: cache + Audio only — no storage.local write per input event.
       const opts: { volume?: number; playbackSpeed?: number } = {};
       if (typeof msg.volume === "number") opts.volume = msg.volume;
       if (typeof msg.playbackSpeed === "number") {
@@ -178,6 +215,32 @@ async function handleMessage(
     case "popup/openOptions":
       await browser.runtime.openOptionsPage();
       return { ok: true };
+    case "popup/openRulesEditor":
+    case "options/openRulesEditor":
+      return openRulesEditor(
+        typeof msg.ruleId === "string" ? msg.ruleId : undefined,
+        msg.forActiveTab === true,
+      );
+
+    case "rules/getStore":
+      return getRulesStore();
+    case "rules/setStore":
+      return setRulesStore(msg.store as import("./siteRules").RulesStore);
+    case "rules/upsert":
+      return upsertRule(msg.rule as SiteRule);
+    case "rules/delete":
+      return deleteRule(String(msg.id ?? ""));
+    case "rules/export":
+      return { json: exportRulesJson(await getRulesStore()) };
+    case "rules/import": {
+      const mode = msg.mode as ImportMode;
+      const incoming = parseImportJson(String(msg.json ?? ""));
+      const store = await getRulesStore();
+      const rules = mergeImported(store.rules, incoming, mode);
+      return setRulesStore({ ...store, rules });
+    }
+    case "rules/tabContext":
+      return rulesTabContext();
 
     case "content/ready":
       if (sender.tab?.id != null) markContentReady(sender.tab.id);
@@ -201,6 +264,68 @@ async function handleMessage(
   }
 }
 
+async function rulesTabContext(): Promise<{
+  host: string;
+  pathname: string;
+  hosts: string[];
+  matchRuleId: string | null;
+}> {
+  const tab = await activeTab();
+  let host = "";
+  let pathname = "";
+  if (tab?.id != null && tab.url && !isRestrictedUrl(tab.url)) {
+    try {
+      await injectContent(tab.id);
+      const info = (await browser.tabs.sendMessage(tab.id, {
+        type: "content/pageInfo",
+      })) as { host: string; pathname: string };
+      host = info.host ?? "";
+      pathname = info.pathname ?? "";
+    } catch {
+      try {
+        const u = new URL(tab.url);
+        host = u.hostname;
+        pathname = u.pathname;
+      } catch {
+        /* */
+      }
+    }
+  }
+  const store = await getRulesStore();
+  const match = host
+    ? findBestRuleForPage(store.rules, host, pathname || "/")
+    : null;
+  return {
+    host,
+    pathname: pathname || "/",
+    hosts: host ? defaultHostsForTab(host) : [],
+    matchRuleId: match?.id ?? null,
+  };
+}
+
+async function openRulesEditor(
+  ruleId?: string,
+  forActiveTab?: boolean,
+): Promise<{ ok: boolean }> {
+  const url = new URL(browser.runtime.getURL("rules.html"));
+  if (ruleId) url.searchParams.set("id", ruleId);
+  if (forActiveTab) {
+    // Capture page tab *before* rules.html becomes active (else host is empty).
+    const ctx = await rulesTabContext();
+    url.searchParams.set("tab", "1");
+    if (ctx.host) {
+      url.searchParams.set("host", ctx.host);
+      url.searchParams.set("path", ctx.pathname);
+      url.searchParams.set("hosts", ctx.hosts.join(","));
+    }
+    if (ctx.matchRuleId && !ruleId) {
+      url.searchParams.set("id", ctx.matchRuleId);
+    }
+  }
+  await browser.tabs.create({ url: url.toString() });
+  return { ok: true };
+}
+
 async function readFromHere(
   tabId: number,
   url: string | undefined,
@@ -210,7 +335,8 @@ async function readFromHere(
     await injectContent(tabId);
     let startIndex = 0;
     let chunks: Chunk[] | undefined;
-    let mode: ChunkMode | undefined;
+    let mode: ChunkMode = "page";
+    let readabilityFailed = false;
     try {
       const r = (await browser.tabs.sendMessage(tabId, {
         type: "content/resolveReadFromHere",
@@ -218,16 +344,52 @@ async function readFromHere(
         chunkIndex: number;
         chunks: Chunk[];
         mode: ChunkMode;
+        readabilityFailed?: boolean;
       };
       startIndex = r.chunkIndex ?? 0;
       chunks = r.chunks;
-      mode = r.mode;
+      mode = "page";
+      readabilityFailed = Boolean(r.readabilityFailed);
     } catch {
       /* activate will chunk */
     }
-    await activate(tabId, { startIndex, chunks, mode });
+    await activate(tabId, {
+      startIndex,
+      chunks,
+      mode,
+      readabilityFailed,
+    });
   } catch {
     /* session toasts */
+  }
+}
+
+async function readSelection(
+  tabId: number,
+  url: string | undefined,
+): Promise<void> {
+  if (isRestrictedUrl(url)) return;
+  try {
+    await injectContent(tabId);
+    let chunks: Chunk[] | undefined;
+    try {
+      const r = (await browser.tabs.sendMessage(tabId, {
+        type: "content/requestSelectionChunks",
+      })) as {
+        chunks: Chunk[];
+        empty: boolean;
+      };
+      chunks = r.chunks;
+    } catch {
+      /* */
+    }
+    await activate(tabId, {
+      startIndex: 0,
+      chunks,
+      mode: "selection",
+    });
+  } catch {
+    /* */
   }
 }
 
@@ -246,7 +408,8 @@ async function doPlay(): Promise<{ ok: boolean; error?: string }> {
     return { ok: true };
   }
   try {
-    await activate(tab.id);
+    // Always full page — selection is menu-only.
+    await activate(tab.id, { mode: "page" });
     return { ok: true };
   } catch (e) {
     return {
@@ -258,7 +421,6 @@ async function doPlay(): Promise<{ ok: boolean; error?: string }> {
 
 async function probeNow(): Promise<ConnectionStatus> {
   const s = await getSettings();
-  // Bound wait so options "Test connection" cannot hang forever.
   return probeConnection(s.secret, AbortSignal.timeout(8000));
 }
 
@@ -293,5 +455,3 @@ async function activeTab(): Promise<browser.Tabs.Tab | undefined> {
   const tabs = await browser.tabs.query({ active: true, currentWindow: true });
   return tabs[0];
 }
-
-

@@ -1,6 +1,7 @@
 import browser from "webextension-polyfill";
 import type { Settings } from "./settings";
 import type { ConnectionStatus } from "./rpc";
+import type { ImportMode, RulesStore } from "./siteRules";
 
 const secretInput = document.getElementById("secret") as HTMLInputElement;
 const showSecret = document.getElementById("showSecret") as HTMLInputElement;
@@ -11,6 +12,17 @@ const pOnline = document.getElementById("p-online")!;
 const pVersion = document.getElementById("p-version")!;
 const pSecret = document.getElementById("p-secret")!;
 const pDetail = document.getElementById("p-detail")!;
+const rulesList = document.getElementById("rulesList")!;
+const ruleNew = document.getElementById("ruleNew") as HTMLButtonElement;
+const ruleImport = document.getElementById("ruleImport") as HTMLButtonElement;
+const ruleExport = document.getElementById("ruleExport") as HTMLButtonElement;
+const ruleImportFile = document.getElementById(
+  "ruleImportFile",
+) as HTMLInputElement;
+const importModeBox = document.getElementById("importMode")!;
+const ruleImportGo = document.getElementById("ruleImportGo") as HTMLButtonElement;
+
+let pendingImportJson: string | null = null;
 
 function flash(text: string, kind: "ok" | "err" | "warn") {
   saveMsg.hidden = false;
@@ -72,6 +84,58 @@ async function send<T>(msg: Record<string, unknown>): Promise<T> {
   return (await browser.runtime.sendMessage(msg)) as T;
 }
 
+function renderRules(store: RulesStore) {
+  rulesList.innerHTML = "";
+  if (!store.rules.length) {
+    const li = document.createElement("li");
+    li.innerHTML = `<div class="meta"><div class="sub">No rules yet.</div></div>`;
+    rulesList.appendChild(li);
+    return;
+  }
+  for (const r of store.rules) {
+    const li = document.createElement("li");
+    if (!r.enabled) li.classList.add("disabled");
+    const host = r.hosts[0] ?? "(no host)";
+    const extra =
+      r.hosts.length > 1 ? ` +${r.hosts.length - 1}` : "";
+    const path = r.pathPrefix.trim() ? r.pathPrefix : "(any path)";
+    li.innerHTML = `
+      <div class="meta">
+        <div class="host"></div>
+        <div class="sub"></div>
+      </div>
+      <div class="row-actions">
+        <button type="button" class="linkish edit">Edit</button>
+        <button type="button" class="linkish del">Delete</button>
+      </div>`;
+    li.querySelector(".host")!.textContent = `${host}${extra}`;
+    li.querySelector(".sub")!.textContent =
+      `${path} · ${r.selectors.length} selector${r.selectors.length === 1 ? "" : "s"}` +
+      (r.note ? ` · ${r.note}` : "") +
+      (r.enabled ? "" : " · off");
+    li.querySelector(".edit")!.addEventListener("click", () => {
+      void send({ type: "options/openRulesEditor", ruleId: r.id });
+    });
+    li.querySelector(".del")!.addEventListener("click", () => {
+      void (async () => {
+        if (!confirm(`Delete rule for ${host}?`)) return;
+        const next = await send<RulesStore>({ type: "rules/delete", id: r.id });
+        renderRules(next);
+      })();
+    });
+    rulesList.appendChild(li);
+  }
+}
+
+async function loadRules() {
+  try {
+    const store = await send<RulesStore>({ type: "rules/getStore" });
+    renderRules(store);
+  } catch (e) {
+    flash(e instanceof Error ? e.message : String(e), "err");
+  }
+}
+
 async function load() {
   try {
     const settings = await send<Settings>({ type: "options/getSettings" });
@@ -80,6 +144,7 @@ async function load() {
     flash(e instanceof Error ? e.message : String(e), "err");
   }
   await runProbe({ quiet: true });
+  await loadRules();
 }
 
 async function runProbe(opts?: { quiet?: boolean }) {
@@ -172,6 +237,70 @@ testBtn.addEventListener("click", () => {
       flash(e instanceof Error ? e.message : String(e), "err");
     } finally {
       testBtn.disabled = false;
+    }
+  })();
+});
+
+ruleNew.addEventListener("click", () => {
+  void send({ type: "options/openRulesEditor" });
+});
+
+ruleExport.addEventListener("click", () => {
+  void (async () => {
+    try {
+      const { json } = await send<{ json: string }>({ type: "rules/export" });
+      const blob = new Blob([json], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "etc-speech-site-rules.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      flash("Exported.", "ok");
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), "err");
+    }
+  })();
+});
+
+ruleImport.addEventListener("click", () => {
+  ruleImportFile.click();
+});
+
+ruleImportFile.addEventListener("change", () => {
+  const file = ruleImportFile.files?.[0];
+  if (!file) return;
+  void file.text().then((text) => {
+    pendingImportJson = text;
+    importModeBox.classList.remove("hidden");
+    flash("Choose merge mode, then Apply import.", "warn");
+  });
+  ruleImportFile.value = "";
+});
+
+ruleImportGo.addEventListener("click", () => {
+  void (async () => {
+    if (!pendingImportJson) {
+      flash("Pick a file first.", "err");
+      return;
+    }
+    const mode =
+      (
+        document.querySelector(
+          'input[name="importMode"]:checked',
+        ) as HTMLInputElement | null
+      )?.value ?? "merge_union";
+    try {
+      const store = await send<RulesStore>({
+        type: "rules/import",
+        json: pendingImportJson,
+        mode: mode as ImportMode,
+      });
+      pendingImportJson = null;
+      importModeBox.classList.add("hidden");
+      renderRules(store);
+      flash("Import applied.", "ok");
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), "err");
     }
   })();
 });

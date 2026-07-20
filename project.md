@@ -117,12 +117,13 @@ Reject non-loopback host; workers ∈ [1,3]. **No daemon synth wall-clock timeou
 
 Full detail: [`.spec/extension.md`](.spec/extension.md), [`.spec/reader.md`](.spec/reader.md).
 
-- MV3 Chrome + Firefox; inject on activate; refuse privileged/PDF URLs; main frame only.
-- Lang list from voices present only; `Intl.DisplayNames`; voice = `ShortName` id.
-- Gen speed stepped (resynth + hash); playback speed = `playbackRate` live; volume live.
-- One session; buffer 1 behind / 8 ahead; skip on exhausted 502 for current chunk; prefetch silent (`priority: "prefetch"`).
-- Extension may run multiple `/v1/synth` in parallel; apply UX timeouts client-side; ignore/abandon late results without requiring daemon cancel.
-- `audioKeepalive` default off; safe toggle.
+- MV3 Chrome + Firefox; content_scripts on http(s) (ctx target + chunk); refuse privileged/PDF; main frame only.
+- Page extract: site-rule destroy → Readability (clone) → live DOM chunk/highlight; toast + `pickRoot` fallback.
+- Context menus: **Read from here** (page) vs **Read selection**; popup Play = full page only.
+- splitSoft ladder ~500 chars: sentence → clause → whitespace → HARD_MAX.
+- Lang list from voices; gen speed stepped; playback/volume live (gain cache across chunks).
+- One session; buffer 1/8; prefetch silent; UX timeouts client-side.
+- `audioKeepalive` default off.
 
 ## Failure UX
 
@@ -149,8 +150,9 @@ Local+secret abuse (accepted); `/health` open; CORS extension-origin only; no pa
 2. **Extension shell** — manifests/build per `.spec/extension.md`, options secret, popup health  
 3. **Read path** — `.spec/reader.md` chunk/session + AudioBridge + blob play  
 4. **Buffer + UX** — prefetch, selection, context menu, lang/voice, speeds  
-5. **Polish** — keepalive, shortcuts gate, dark UI, README  
-6. **Optional** — example user unit  
+5. **Reader quality** — split ladder; RFH vs selection menus; site rules + Wikipedia seed; Readability  
+6. **Polish** — keepalive, shortcuts gate, dark UI  
+7. **Optional** — example user unit  
 
 Handoff: implement **one build-order step per session**; do not freestyle architecture; note gaps in `DECISIONS.md`.
 
@@ -162,6 +164,7 @@ Handoff: implement **one build-order step per session**; do not freestyle archit
 - [x] extension shell: manifests/build, options secret, popup health  
 - [x] extension blob play; highlight; buffer; selection; Read From Here  
 - [x] lang filter; gen −50…+100/10%; free playbackRate  
+- [x] split ladder; RFH ≠ selection; site rules + Readability  
 - [ ] Chrome + FF smoke; refuse PDF/privileged  
 - [ ] toasts only for current play chunk  
 
