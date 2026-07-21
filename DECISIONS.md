@@ -5,6 +5,12 @@
 - FF MV3 event page + bg `Audio` can pause/stall without `ended` → session stuck on N/M, silent.
 - Fix: while `ffExpectPlaying`, 1s watchdog resumes unexpected pause (×2) else treats as ended; ~4s zero `currentTime` progress → ended. `alarms` pulse ~25s while session playing/paused. Serialize `onAudioEnded` with advanceLock.
 
+## 2026-07-19 — Chromium first RFH starts at top
+
+- Vivaldi/Chrome: first “Read from here” on a mid-page paragraph began at 0; later tries OK. FF fine.
+- Cause: content script often missing on cold tabs (open before extension load / late inject) so contextmenu never set lastCtxEl; inject-on-menu is after the click.
+- Fix: `run_at: document_end`; inject all http(s) tabs on install/startup + on tab `complete`; contextmenu mirrors element path to bg (`content/ctxTarget`); RFH passes `fallbackPath` into resolve.
+
 ## 2026-07-19 — Firefox spontaneous Stop (session wiped)
 
 - User report: equivalent to Stop — popup loses N/M entirely (not a stuck playing state). Keepalive off.

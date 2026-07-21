@@ -2,6 +2,7 @@ import browser from "webextension-polyfill";
 import {
   chunkPage,
   chunkSelection,
+  childIndexPath,
   nearestChunkIndex,
   resolveAnchor,
   type Chunk,
@@ -37,6 +38,12 @@ function boot() {
     "contextmenu",
     (e) => {
       lastCtxEl = e.target instanceof Element ? e.target : null;
+      // Mirror to background — Chromium often has no content script on the
+      // first right-click after extension load (cold tab); RFH still gets a path.
+      if (lastCtxEl) {
+        const path = childIndexPath(document.documentElement, lastCtxEl);
+        safeSend({ type: "content/ctxTarget", path });
+      }
     },
     true,
   );
@@ -68,7 +75,13 @@ function boot() {
         );
         return Promise.resolve({ ok: true });
       case "content/resolveReadFromHere":
-        return resolveReadFromHere();
+        return resolveReadFromHere(
+          Array.isArray(msg.fallbackPath)
+            ? (msg.fallbackPath as number[])
+            : msg.fallbackPath === null
+              ? null
+              : undefined,
+        );
       case "content/pageInfo":
         return Promise.resolve({
           host: location.hostname,
@@ -191,14 +204,21 @@ function boot() {
     };
   }
 
-  async function resolveReadFromHere(): Promise<{
+  async function resolveReadFromHere(
+    fallbackPath?: number[] | null,
+  ): Promise<{
     chunkIndex: number;
     chunks: Chunk[];
     mode: ChunkMode;
     readabilityFailed: boolean;
   }> {
     // Snapshot before any await — concurrent collects must not steal context.
-    const ctxEl = lastCtxEl;
+    let ctxEl = lastCtxEl;
+    // Cold inject wiped in-page lastCtxEl; bg may still have path from earlier
+    // contextmenu (or from a previous content instance on this tab).
+    if (!ctxEl && fallbackPath !== undefined && fallbackPath !== null) {
+      ctxEl = resolveAnchor(document.documentElement, fallbackPath);
+    }
     const data = await collectPageChunks();
     let chunkIndex = 0;
     if (ctxEl && data.root) {

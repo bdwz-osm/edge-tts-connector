@@ -149,15 +149,17 @@ function installMenus() {
 browser.runtime.onInstalled.addListener(() => {
   installMenus();
   void getRulesStore(); // seed Wikipedia defaults
+  void ensureContentOnAllTabs();
 });
 
-// Event pages / SW restart: menus may already exist; ensure seed.
+// Event pages / SW restart: menus may already exist; ensure seed + content.
 void getRulesStore();
 try {
   installMenus();
 } catch {
   /* */
 }
+void ensureContentOnAllTabs();
 
 browser.contextMenus.onClicked.addListener((info, tab) => {
   if (tab?.id == null) return;
@@ -170,26 +172,48 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
+/** Last right-click target path (from documentElement) per tab — RFH cold start. */
+const ctxTargetByTab = new Map<number, number[]>();
+
 browser.tabs.onRemoved.addListener((tabId) => {
   clearContentReady(tabId);
+  ctxTargetByTab.delete(tabId);
   void handleContentGone(tabId);
 });
 
-browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
+browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   // Real navigation / reload. Ignore title-only and other noise.
   // url set → navigated; status loading without url → reload/same-doc start.
   const navigated = typeof changeInfo.url === "string";
   const loading = changeInfo.status === "loading";
-  if (!navigated && !loading) return;
+  const complete = changeInfo.status === "complete";
 
   if (loading || navigated) {
     clearContentReady(tabId);
+    ctxTargetByTab.delete(tabId);
+    const s = getSession();
+    if (s && s.tabId === tabId) void destroySession();
   }
-  const s = getSession();
-  if (!s || s.tabId !== tabId) return;
-  // Drop session only on main-tab document load/navigation, not favicon noise.
-  if (loading || navigated) void destroySession();
+
+  // Ensure content script is present before the user right-clicks (Chromium
+  // often skips manifest injection into tabs that were open pre-extension-load).
+  if (complete && tab.url && !isRestrictedUrl(tab.url)) {
+    void injectContent(tabId).catch(() => {});
+  }
 });
+
+/** Inject into every http(s) tab — call on install/startup. */
+async function ensureContentOnAllTabs(): Promise<void> {
+  try {
+    const tabs = await browser.tabs.query({});
+    for (const t of tabs) {
+      if (t.id == null || isRestrictedUrl(t.url)) continue;
+      void injectContent(t.id).catch(() => {});
+    }
+  } catch {
+    /* */
+  }
+}
 
 browser.runtime.onMessage.addListener(
   (message: unknown, sender: browser.Runtime.MessageSender) => {
@@ -322,9 +346,18 @@ async function handleMessage(
     case "content/ready":
       if (sender.tab?.id != null) markContentReady(sender.tab.id);
       return { ok: true };
+    case "content/ctxTarget":
+      if (sender.tab?.id != null && Array.isArray(msg.path)) {
+        ctxTargetByTab.set(
+          sender.tab.id,
+          (msg.path as unknown[]).map((n) => Number(n)).filter((n) => n >= 0),
+        );
+      }
+      return { ok: true };
     case "content/gone":
       if (sender.tab?.id != null) {
         clearContentReady(sender.tab.id);
+        ctxTargetByTab.delete(sender.tab.id);
         await handleContentGone(sender.tab.id);
       }
       return { ok: true };
@@ -415,8 +448,10 @@ async function readFromHere(
     let mode: ChunkMode = "page";
     let readabilityFailed = false;
     try {
+      const fallbackPath = ctxTargetByTab.get(tabId);
       const r = (await browser.tabs.sendMessage(tabId, {
         type: "content/resolveReadFromHere",
+        fallbackPath: fallbackPath !== undefined ? fallbackPath : null,
       })) as {
         chunkIndex: number;
         chunks: Chunk[];
