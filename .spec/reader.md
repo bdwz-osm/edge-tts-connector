@@ -1,6 +1,6 @@
 # Chunking + session
 
-Parent: [`../project.md`](../project.md). Messages: [`rpc.md`](rpc.md). Site rules: [`extension.md`](extension.md).
+Parent: [`project.md`](project.md). Messages: [`rpc.md`](rpc.md). Site rules: [`extension.md`](extension.md).
 
 ## Chunk algorithm (deterministic)
 

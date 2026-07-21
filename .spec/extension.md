@@ -1,6 +1,6 @@
 # Extension build + runtime
 
-Parent: [`../project.md`](../project.md). Wire: [`rpc.md`](rpc.md). Reader: [`reader.md`](reader.md).
+Parent: [`project.md`](project.md). Wire: [`rpc.md`](rpc.md). Reader: [`reader.md`](reader.md).
 
 ## Layout
 

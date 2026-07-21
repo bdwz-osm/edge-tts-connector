@@ -1,6 +1,6 @@
 # RPC + messaging
 
-Parent: [`../project.md`](../project.md). Base: `http://127.0.0.1:24765`. Auth header `X-Auth-Token: <secret>` on all but `/health`. CORS: echo only `chrome-extension://*` / `moz-extension://*` Origins; `OPTIONS` preflight; allow `X-Auth-Token, Content-Type`.
+Parent: [`project.md`](project.md). Base: `http://127.0.0.1:24765`. Auth header `X-Auth-Token: <secret>` on all but `/health`. CORS: echo only `chrome-extension://*` / `moz-extension://*` Origins; `OPTIONS` preflight; allow `X-Auth-Token, Content-Type`.
 
 Library exception inventory (not product law): [`edge-tts-errors.md`](edge-tts-errors.md). Product mapping below wins.
 
