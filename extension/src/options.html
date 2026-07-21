@@ -75,9 +75,12 @@
         <input id="ruleImportFile" type="file" accept="application/json,.json" hidden />
         <div id="importMode" class="import-mode hidden">
           <span class="muted">On conflict:</span>
-          <label><input type="radio" name="importMode" value="merge_union" checked /> Union selectors</label>
+          <label><input type="radio" name="importMode" value="replace_all" checked /> Replace all rules</label>
+          <span class="muted">All existing rules will be deleted before import.</span>
           <label><input type="radio" name="importMode" value="merge_replace_key" /> Replace matching site</label>
-          <label><input type="radio" name="importMode" value="replace_all" /> Replace all rules</label>
+          <span class="muted">Old rules will be deleted if they match a site from the imported rules.</span>
+          <label><input type="radio" name="importMode" value="merge_union" /> Union selectors</label>
+          <span class="muted">New rules will attempt to merge cleanly with the old rules.</span>
           <button type="button" id="ruleImportGo" class="secondary">Apply import</button>
         </div>
         <ul id="rulesList" class="rules-list"></ul>
