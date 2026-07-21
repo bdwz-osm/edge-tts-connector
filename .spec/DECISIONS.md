@@ -1,5 +1,10 @@
 # DECISIONS
 
+## 2026-07-20 — Audio keepalive moved to Options
+
+- Popup checkbox → Options “Audio” with short explanation. Still `audioKeepalive` setting; auto-save on toggle.
+- Keepalive is **not** tab-scoped: Chrome offscreen / FF background, single global session. `activate` → `destroySession` stops it before a new tab’s read starts.
+
 ## 2026-07-20 — Chromium first RFH starts at top
 
 - Vivaldi/Chrome: first “Read from here” on a mid-page paragraph began at 0; later tries OK. FF fine.

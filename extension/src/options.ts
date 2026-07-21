@@ -5,6 +5,7 @@ import type { ImportMode, RulesStore } from "./siteRules";
 
 const secretInput = document.getElementById("secret") as HTMLInputElement;
 const showSecret = document.getElementById("showSecret") as HTMLInputElement;
+const keepaliveEl = document.getElementById("keepalive") as HTMLInputElement;
 const saveBtn = document.getElementById("save") as HTMLButtonElement;
 const testBtn = document.getElementById("test") as HTMLButtonElement;
 const saveMsg = document.getElementById("saveMsg")!;
@@ -24,6 +25,10 @@ const ruleImportGo = document.getElementById("ruleImportGo") as HTMLButtonElemen
 
 let pendingImportJson: string | null = null;
 let importReadGeneration = 0;
+/** Last audioKeepalive known written to storage. */
+let confirmedKeepalive = false;
+let keepaliveBusy = false;
+let keepaliveQueued = false;
 
 function flash(text: string, kind: "ok" | "err" | "warn") {
   saveMsg.hidden = false;
@@ -141,11 +146,47 @@ async function load() {
   try {
     const settings = await send<Settings>({ type: "options/getSettings" });
     secretInput.value = settings.secret ?? "";
+    confirmedKeepalive = settings.audioKeepalive;
+    keepaliveEl.checked = confirmedKeepalive;
   } catch (e) {
     flash(e instanceof Error ? e.message : String(e), "err");
   }
   await runProbe({ quiet: true });
   await loadRules();
+}
+
+async function flushKeepalive() {
+  if (keepaliveBusy) {
+    keepaliveQueued = true;
+    return;
+  }
+  keepaliveBusy = true;
+  try {
+    for (;;) {
+      const want = keepaliveEl.checked;
+      if (want === confirmedKeepalive) break;
+      try {
+        await send({
+          type: "options/setSettings",
+          patch: { audioKeepalive: want },
+        });
+        confirmedKeepalive = want;
+      } catch (e) {
+        flash(e instanceof Error ? e.message : String(e), "err");
+        // Don't clobber a newer toggle made while send() was in flight.
+        if (keepaliveEl.checked === want) {
+          keepaliveEl.checked = confirmedKeepalive;
+          break;
+        }
+      }
+    }
+  } finally {
+    keepaliveBusy = false;
+    if (keepaliveQueued) {
+      keepaliveQueued = false;
+      void flushKeepalive();
+    }
+  }
 }
 
 async function runProbe(opts?: { quiet?: boolean }) {
@@ -192,6 +233,10 @@ async function runProbe(opts?: { quiet?: boolean }) {
 
 showSecret.addEventListener("change", () => {
   secretInput.type = showSecret.checked ? "text" : "password";
+});
+
+keepaliveEl.addEventListener("change", () => {
+  void flushKeepalive();
 });
 
 saveBtn.addEventListener("click", () => {

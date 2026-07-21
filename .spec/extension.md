@@ -134,9 +134,9 @@ SiteRule = {
 
 ## UI (dark)
 
-- **Options:** secret, probe, site rules list, shortcuts help.
+- **Options:** secret, probe, audio keepalive (+ short explanation), site rules list, shortcuts help.
 - **Rules editor:** hosts, path prefix, selectors, note, enable; draft-safe.
-- **Popup:** transport, lang/voice/speeds/volume, keepalive, site rules, options.
+- **Popup:** transport, lang/voice/speeds/volume, site rules, options.
 - **Toasts:** readability fallback; play-chunk failures; empty selection/page.
 
 ## Sole RPC client

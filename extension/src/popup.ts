@@ -19,7 +19,6 @@ const playbackEl = document.getElementById("playbackSpeed") as HTMLInputElement;
 const playbackOut = document.getElementById("playbackOut")!;
 const volumeEl = document.getElementById("volume") as HTMLInputElement;
 const volumeOut = document.getElementById("volumeOut")!;
-const keepaliveEl = document.getElementById("keepalive") as HTMLInputElement;
 const clearBtn = document.getElementById("clearCache") as HTMLButtonElement;
 const optionsBtn = document.getElementById("options") as HTMLButtonElement;
 const siteRulesBtn = document.getElementById("siteRules") as HTMLButtonElement;
@@ -142,7 +141,6 @@ async function refresh() {
         volumeEl.value = String(settings.volume);
         volumeOut.textContent = String(Math.round(settings.volume * 100));
       }
-      keepaliveEl.checked = settings.audioKeepalive;
     } finally {
       applying = false;
     }
@@ -357,13 +355,6 @@ volumeEl.addEventListener("input", () => {
 volumeEl.addEventListener("change", () => {
   if (applying) return;
   void patchSettings({ volume: Number(volumeEl.value) }).catch((e) => {
-    showBanner(e instanceof Error ? e.message : String(e));
-  });
-});
-
-keepaliveEl.addEventListener("change", () => {
-  if (applying) return;
-  void patchSettings({ audioKeepalive: keepaliveEl.checked }).catch((e) => {
     showBanner(e instanceof Error ? e.message : String(e));
   });
 });
