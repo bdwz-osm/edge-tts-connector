@@ -18,7 +18,7 @@
 2. **`.spec/*`** — how to implement that intent (HTTP shapes, messages, chunking, manifests). Prefer following these over inventing parallels.
 3. **`DECISIONS.md`** — what actually happened when the plan was incomplete, wrong in practice, or intentionally overridden.
 
-On conflict: product intent in `project.md` wins; concrete wire/behavior detail wins in `.spec/*` when intent agrees. Record the resolution in `DECISIONS.md`.
+On conflict: product intent in `project.md` wins; concrete wire/behavior detail wins in `.spec/*` when intent agrees. Record the resolution in `DECISIONS.md` by prepending it above the others.
 
 ## DECISIONS.md
 
