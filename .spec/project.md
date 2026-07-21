@@ -148,17 +148,17 @@ Local+secret abuse (accepted); `/health` open; CORS extension-origin only; no pa
 
 ## Build order
 
-1. **Daemon** — DEPENDENCIES, run.sh, config/secret, routes per `rpc.md`, errors, atomic cache, curl acceptance  
-2. **Extension shell** — manifests/build per `extension.md`, options secret, popup health  
-3. **Read path** — `reader.md` chunk/session + AudioBridge + blob play  
-4. **Buffer + UX** — prefetch, selection, context menu, lang/voice, speeds  
-5. **Reader quality** — split ladder; RFH vs selection menus; site rules + Wikipedia seed; Readability  
-6. **Polish** — keepalive, shortcuts gate, dark UI  
-7. **Optional** — example user unit  
+1. ~~**Daemon** — DEPENDENCIES, run.sh, config/secret, routes per `rpc.md`, errors, atomic cache, curl acceptance~~  
+2. ~~**Extension shell** — manifests/build per `extension.md`, options secret, popup health~~  
+3. ~~**Read path** — `reader.md` chunk/session + AudioBridge + blob play~~  
+4. ~~**Buffer + UX** — prefetch, selection, context menu, lang/voice, speeds~~  
+5. ~~**Reader quality** — split ladder; RFH vs selection menus; site rules + Wikipedia seed; Readability~~ (feature-complete; optional site-rules tests / manual smoke are polish, not blockers)  
 
-Handoff: implement **one build-order step per session**; do not freestyle architecture; note gaps in `DECISIONS.md`.
+~~Handoff: implement **one open build-order step per session**; do not freestyle architecture;~~ note gaps in `DECISIONS.md`.
 
-## v1 checklist
+Now that the main groundwork for the program has been built, changes will be made at the discretion of the maintainer.
+
+## v0.1 checklist
 
 - [x] server.sh / run.sh start/stop, :24765, secret  
 - [x] rpc.md curl suite green (health/voices/synth/audio/errors)  
@@ -167,8 +167,6 @@ Handoff: implement **one build-order step per session**; do not freestyle archit
 - [x] extension blob play; highlight; buffer; selection; Read From Here  
 - [x] lang filter; gen −50…+100/10%; free playbackRate  
 - [x] split ladder; RFH ≠ selection; site rules + Readability  
-- [ ] Chrome + FF smoke; refuse PDF/privileged  
-- [ ] toasts only for current play chunk  
 
 ## Defaults
 
