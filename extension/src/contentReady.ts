@@ -123,6 +123,12 @@ export async function injectContent(
   readyTabs.delete(tabId);
 
   const { promise: readyPromise, cancel } = registerWaiter(tabId, timeoutMs);
+  // Handler must attach before any await: clearContentReady (nav/gone) can
+  // reject during insertCSS/executeScript and would otherwise be unhandled.
+  const readyOutcome = readyPromise.then(
+    () => null as Error | null,
+    (e: unknown) => (e instanceof Error ? e : new Error(String(e))),
+  );
   let pollAlive = true;
 
   try {
@@ -138,8 +144,7 @@ export async function injectContent(
     pollAlive = false;
     const err = e instanceof Error ? e : new Error(String(e));
     cancel(err);
-    // Absorb this waiter's rejection so it is not unhandled.
-    await readyPromise.catch(() => {});
+    await readyOutcome;
     throw err;
   }
 
@@ -156,7 +161,8 @@ export async function injectContent(
   })();
 
   try {
-    await readyPromise;
+    const err = await readyOutcome;
+    if (err) throw err;
   } finally {
     pollAlive = false;
   }

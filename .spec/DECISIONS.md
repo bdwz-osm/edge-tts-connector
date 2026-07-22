@@ -1,5 +1,10 @@
 # DECISIONS
 
+## 2026-07-20 — Unhandled "content gone" during injectContent
+
+- `clearContentReady` (tab nav / `content/gone`) rejected the ready waiter while `injectContent` was still in `insertCSS`/`executeScript`, before `await readyPromise` — unhandled rejection in the service worker.
+- Fix: attach `readyOutcome` handler immediately after `registerWaiter`; rethrow after inject/poll.
+
 ## 2026-07-20 — Audio keepalive moved to Options
 
 - Popup checkbox → Options “Audio” with short explanation. Still `audioKeepalive` setting; auto-save on toggle.
